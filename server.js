@@ -4,10 +4,21 @@ require("dotenv").config();
 const express = require("express");
 const path = require("path");
 const session = require("express-session");
+const rateLimit = require("express-rate-limit");
 const bcrypt = require("bcryptjs");
 const { createClient } = require("@supabase/supabase-js");
 
 const app = express();
+const limiteConnexion = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: {
+    succes: false,
+    message: "Trop de tentatives. Réessayez dans 15 minutes."
+  }
+});
 app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3000;
 const DOSSIER_PUBLIC = path.join(__dirname, "public");
@@ -267,7 +278,7 @@ app.get("/api/auth/me", (req, res) => {
 // 9. CONNEXION ADMINISTRATEUR
 // ======================================================
 
-app.post("/api/auth/login", async (req, res) => {
+app.post("/api/auth/login", limiteConnexion, async (req, res) => {
   try {
     const identifiant = nettoyerTexte(req.body.identifiant);
     const motDePasse = req.body.mot_de_passe;
@@ -676,7 +687,7 @@ if (
 // 11. CONNEXION D'UN MEMBRE
 // ======================================================
 
-app.post("/api/auth/connexion-membre", async (req, res) => {
+app.post("/api/auth/connexion-membre", limiteConnexion, async (req, res) => {
   try {
     const identifiant = nettoyerTexte(req.body.identifiant);
     const motDePasse = req.body.mot_de_passe;
