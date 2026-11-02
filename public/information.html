@@ -1,0 +1,298 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mon profil - Registre Fogny</title>
+  <link rel="stylesheet" href="/style.css">
+
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #f1f4f8;
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 25px 15px;
+      box-sizing: border-box;
+    }
+
+    .carte {
+      width: 100%;
+      max-width: 480px;
+      background: white;
+      border-radius: 18px;
+      padding: 28px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.09);
+      box-sizing: border-box;
+    }
+
+    .entete {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 25px;
+    }
+
+    .avatar {
+      width: 65px;
+      height: 65px;
+      border-radius: 50%;
+      background: #173b5e;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 23px;
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+
+    .titre {
+      color: #173b5e;
+      font-size: 13px;
+      font-weight: bold;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+
+    .nom {
+      font-size: 21px;
+      font-weight: bold;
+      color: #173b5e;
+      margin: 0 0 7px;
+      text-transform: uppercase;
+    }
+
+    .statut {
+      display: inline-block;
+      background: #e4f5eb;
+      color: #21834b;
+      padding: 5px 11px;
+      border-radius: 20px;
+      font-size: 12px;
+    }
+
+    .separateur {
+      border: none;
+      border-top: 1px solid #e5eaf0;
+      margin: 22px 0;
+    }
+
+    .sous-titre {
+      color: #173b5e;
+      font-size: 14px;
+      font-weight: bold;
+      margin-bottom: 18px;
+    }
+
+    .information {
+      display: flex;
+      justify-content: space-between;
+      gap: 15px;
+      padding: 11px 0;
+      border-bottom: 1px solid #f0f2f5;
+      font-size: 14px;
+    }
+
+    .information span:first-child {
+      color: #778292;
+    }
+
+    .information span:last-child {
+      color: #263445;
+      font-weight: 600;
+      text-align: right;
+      overflow-wrap: anywhere;
+    }
+
+    .pied {
+      text-align: center;
+      color: #173b5e;
+      font-weight: bold;
+      letter-spacing: 1px;
+      margin: 20px 0;
+    }
+
+    .btn-deconnexion {
+      width: 100%;
+      padding: 13px;
+      border: none;
+      border-radius: 9px;
+      background: #173b5e;
+      color: white;
+      font-size: 15px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .btn-deconnexion:hover {
+      background: #102b46;
+    }
+
+    .message {
+      text-align: center;
+      color: #555;
+    }
+  </style>
+</head>
+
+<body>
+
+  <main class="carte">
+    <div id="chargement" class="message">Chargement du profil...</div>
+
+    <div id="contenu" hidden>
+      <div class="entete">
+        <div class="avatar" id="avatar">M</div>
+
+        <div>
+          <div class="titre">CARTE DE MEMBRE</div>
+          <h1 class="nom" id="nom">Nom du membre</h1>
+          <span class="statut">Membre enregistré</span>
+        </div>
+      </div>
+
+      <hr class="separateur">
+
+      <div class="sous-titre">INFORMATIONS PERSONNELLES</div>
+
+      <div class="information">
+        <span>Prénom</span>
+        <span id="prenom">-</span>
+      </div>
+
+      <div class="information">
+        <span>Nom</span>
+        <span id="nomInfo">-</span>
+      </div>
+
+      <div class="information">
+        <span>Sexe</span>
+        <span id="sexe">-</span>
+      </div>
+
+      <div class="information">
+        <span>Téléphone</span>
+        <span id="telephone">-</span>
+      </div>
+
+      <div class="information">
+        <span>E-mail</span>
+        <span id="email">-</span>
+      </div>
+
+      <div class="information">
+        <span>Profession</span>
+        <span id="profession">-</span>
+      </div>
+
+      <div class="information">
+        <span>Fonction</span>
+        <span id="fonction">-</span>
+      </div>
+
+      <div class="information">
+        <span>Date de naissance</span>
+        <span id="naissance">-</span>
+      </div>
+
+      <div class="information">
+        <span>Date d'inscription</span>
+        <span id="inscription">-</span>
+      </div>
+
+      <hr class="separateur">
+
+      <div class="pied">REGISTRE FOGNY</div>
+
+      <button class="btn-deconnexion" id="deconnexion">
+        Déconnexion
+      </button>
+    </div>
+  </main>
+
+  <script>
+    const afficher = (id, valeur) => {
+      document.getElementById(id).textContent = valeur || "-";
+    };
+
+    const formaterDate = valeur => {
+      if (!valeur) return "-";
+
+      const date = new Date(valeur);
+      if (Number.isNaN(date.getTime())) return valeur;
+
+      return date.toLocaleDateString("fr-FR");
+    };
+
+    async function chargerProfil() {
+      const chargement = document.getElementById("chargement");
+      const contenu = document.getElementById("contenu");
+
+      try {
+        const session = await fetch("/api/auth/me");
+
+        if (!session.ok) throw new Error("Impossible de vérifier la connexion.");
+
+        const utilisateur = await session.json();
+
+        if (!utilisateur.connecte) {
+          window.location.href = "/connexion.html";
+          return;
+        }
+
+        if (utilisateur.role === "administrateur") {
+          window.location.href = "/";
+          return;
+        }
+
+        const reponse = await fetch("/api/membres/mon-profil");
+        const resultat = await reponse.json();
+
+        if (!reponse.ok || !resultat.succes) {
+          throw new Error(resultat.message || "Impossible de charger votre profil.");
+        }
+
+        const membre = resultat.membre;
+
+        afficher("prenom", membre.prenom);
+        afficher("nomInfo", membre.nom);
+        afficher("nom", `${membre.prenom || ""} ${membre.nom || ""}`.trim());
+        afficher("sexe", membre.sexe);
+        afficher("telephone", membre.telephone);
+        afficher("email", membre.email);
+        afficher("profession", membre.profession);
+        afficher("fonction", membre.fonction);
+        afficher("naissance", formaterDate(membre.date_naissance));
+        afficher("inscription", formaterDate(membre.date_inscription));
+
+        const initiales =
+          `${(membre.prenom || "").charAt(0)}${(membre.nom || "").charAt(0)}`;
+
+        afficher("avatar", initiales.toUpperCase() || "M");
+
+        chargement.hidden = true;
+        contenu.hidden = false;
+
+      } catch (erreur) {
+        chargement.textContent = erreur.message;
+      }
+    }
+
+    document.getElementById("deconnexion").addEventListener("click", async () => {
+      try {
+        await fetch("/api/auth/logout", { method: "POST" });
+      } finally {
+        window.location.href = "/connexion.html";
+      }
+    });
+
+    chargerProfil();
+  </script>
+
+</body>
+</html>

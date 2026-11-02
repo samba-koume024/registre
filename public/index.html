@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Registre Fogny - Gestion des membres</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="app-layout">
+
+        <!-- MENU LATERAL -->
+        <aside class="sidebar">
+
+            <div class="brand">
+                <div class="brand-logo">RF</div>
+                <div>
+                    <h2>Registre Fogny</h2>
+                    <p>Gestion des membres</p>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav" aria-label="Navigation principale">
+
+                <a href="#dashboard" class="nav-link active">
+                    <span class="nav-icon">▦</span>
+                    Tableau de bord
+                </a>
+
+                <a href="#inscription" class="nav-link">
+                    <span class="nav-icon">＋</span>
+                    Inscrire un membre
+                </a>
+
+                <a href="#membres" class="nav-link">
+                    <span class="nav-icon">♙</span>
+                    Liste des membres
+                </a>
+
+                <a href="#statistiques" class="nav-link">
+                    <span class="nav-icon">▥</span>
+                    Statistiques
+                </a>
+
+                <a href="#programme" class="nav-link">
+                    <span class="nav-icon">▦</span>
+                    Programme hebdomadaire
+                </a>
+
+                <a href="#forum" class="nav-link">
+                    <span class="nav-icon">✉</span>
+                    Forum
+                </a>
+
+                <a href="#profil" class="nav-link">
+                    <span class="nav-icon">♙</span>
+                    Mon profil
+                </a>
+
+                <a href="#gestion-bureau" class="nav-link">
+                    <span class="nav-icon">♙</span>
+                    Gestion du bureau
+                </a>
+
+            </nav>
+
+            <div class="sidebar-footer">
+                <span class="status-dot"></span>
+                Registre local
+            </div>
+
+            <button id="bouton-deconnexion" type="button">
+                Se déconnecter
+            </button>
+
+        </aside>
+
+        <!-- CONTENU PRINCIPAL -->
+        <main class="main-content">
+
+            <!-- BARRE SUPERIEURE -->
+            <header class="topbar">
+                <div>
+                    <p class="topbar-label">ESPACE D'ADMINISTRATION</p>
+                    <h1>Gestion des membres</h1>
+                </div>
+
+                <div class="topbar-badge">
+                    <span class="status-dot"></span>
+                    Registre Fogny
+                </div>
+            </header>
+
+            <!-- TABLEAU DE BORD -->
+            <section class="dashboard page-section" id="dashboard" style="display: block;">
+
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">VUE D'ENSEMBLE</p>
+                        <h2>Tableau de bord</h2>
+                        <p class="section-description">
+                            Suivez les effectifs et les inscriptions du mouvement.
+                        </p>
+                    </div>
+
+                    <button type="button" id="exporter-excel" class="export-button">
+                        ↓ Exporter vers Excel
+                    </button>
+                </div>
+
+                <div class="stats-container">
+
+                    <div class="stat-card stat-total">
+                        <div class="stat-card-top">
+                            <span class="stat-icon">♙</span>
+                            <span class="stat-label">Effectif total</span>
+                        </div>
+                        <p id="total-membres">0</p>
+                        <span class="stat-caption">Membres enregistrés</span>
+                    </div>
+
+                    <div class="stat-card stat-hommes">
+                        <div class="stat-card-top">
+                            <span class="stat-icon">♂</span>
+                            <span class="stat-label">Hommes</span>
+                        </div>
+                        <p id="total-hommes">0</p>
+                        <span class="stat-caption">Membres masculins</span>
+                    </div>
+
+                    <div class="stat-card stat-femmes">
+                        <div class="stat-card-top">
+                            <span class="stat-icon">♀</span>
+                            <span class="stat-label">Femmes</span>
+                        </div>
+                        <p id="total-femmes">0</p>
+                        <span class="stat-caption">Membres féminins</span>
+                    </div>
+
+                    <div class="stat-card stat-mois">
+                        <div class="stat-card-top">
+                            <span class="stat-icon">▦</span>
+                            <span class="stat-label">Ce mois</span>
+                        </div>
+                        <p id="inscriptions-mois">0</p>
+                        <span class="stat-caption">Nouvelles inscriptions</span>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- GRAPHIQUES -->
+            <section class="charts-section page-section" id="statistiques" style="display: none;">
+
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">ANALYSE</p>
+                        <h2>Statistiques du mouvement</h2>
+                    </div>
+                </div>
+
+                <div class="charts-grid">
+
+                    <div class="graphique-container">
+                        <h3>Répartition par sexe</h3>
+                        <p class="chart-description">
+                            Proportion des hommes et des femmes.
+                        </p>
+
+                        <div class="graphique-camembert">
+                            <canvas id="graphique-sexe"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="stats-fonctions">
+                        <h3>Répartition par fonction</h3>
+                        <p class="chart-description">
+                            Effectifs selon la fonction déclarée.
+                        </p>
+
+                        <ul id="repartition-fonctions">
+                            <li>Chargement des statistiques...</li>
+                        </ul>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- FORMULAIRE D'INSCRIPTION -->
+            <section class="form-section page-section" id="inscription" style="display: none;">
+
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">NOUVEAU DOSSIER</p>
+                        <h2>Inscrire un membre</h2>
+                        <p class="section-description">
+                            Enregistrez les informations du nouveau membre.
+                        </p>
+                    </div>
+                </div>
+
+                <form id="form-membre" class="formulaire-pro">
+
+                    <!-- CARTE 1 -->
+                    <div class="form-card">
+
+                        <div class="form-card-heading">
+                            <div class="form-card-icon">01</div>
+                            <div>
+                                <h3>Informations personnelles</h3>
+                                <p>Identité et état civil du membre</p>
+                            </div>
+                        </div>
+
+                        <div class="form-grid">
+
+                            <div class="form-group">
+                                <label for="prenom">Prénom *</label>
+                                <input
+                                    type="text"
+                                    id="prenom"
+                                    name="prenom"
+                                    placeholder="Ex. : Amadou"
+                                    required
+                                >
+                            </div>
+
+                            <div class="form-group">
+                                <label for="nom">Nom *</label>
+                                <input
+                                    type="text"
+                                    id="nom"
+                                    name="nom"
+                                    placeholder="Ex. : Diop"
+                                    required
+                                >
+                            </div>
+
+                            <div class="form-group">
+                                <label for="sexe">Sexe *</label>
+                                <select id="sexe" name="sexe" required>
+                                    <option value="">Sélectionner</option>
+                                    <option value="Masculin">Masculin</option>
+                                    <option value="Féminin">Féminin</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="date_naissance">Date de naissance</label>
+                                <input
+                                    type="date"
+                                    id="date_naissance"
+                                    name="date_naissance"
+                                >
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- CARTE 2 -->
+                    <div class="form-card">
+
+                        <div class="form-card-heading">
+                            <div class="form-card-icon">02</div>
+                            <div>
+                                <h3>Coordonnées et informations associatives</h3>
+                                <p>Contact et responsabilités dans le mouvement</p>
+                            </div>
+                        </div>
+
+                        <div class="form-grid">
+
+                            <div class="form-group">
+                                <label for="telephone">Téléphone</label>
+                                <input
+                                    type="tel"
+                                    id="telephone"
+                                    name="telephone"
+                                    pattern="[0-9]{9}"
+                                    maxlength="9"
+                                    inputmode="numeric"
+                                    placeholder="Ex. : 771234567"
+                                >
+                                <small>9 chiffres si renseigné.</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="email">Adresse e-mail</label>
+                                <input
+                                    type="email"
+                                    id="email"
+                                    name="email"
+                                    placeholder="Ex. : membre@email.com"
+                                >
+                            </div>
+
+                            <div class="form-group">
+                                <label for="profession">Profession</label>
+                                <input
+                                    type="text"
+                                    id="profession"
+                                    name="profession"
+                                    placeholder="Ex. : Étudiant"
+                                >
+                            </div>
+
+                            <div class="form-group form-group-full">
+                                <label for="fonction">Fonction dans le mouvement</label>
+                                <input
+                                    type="text"
+                                    id="fonction"
+                                    name="fonction"
+                                    placeholder="Ex. : Président, secrétaire, membre"
+                                >
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- BOUTONS -->
+                    <div class="form-actions form-actions-pro">
+
+                        <button type="reset" class="secondary-button">
+                            Effacer le formulaire
+                        </button>
+
+                        <button type="submit" class="primary-button">
+                            + Enregistrer le membre
+                        </button>
+
+                    </div>
+
+                    <p id="message" role="status" aria-live="polite"></p>
+
+                </form>
+            </section>
+
+            <!-- PROGRAMME HEBDOMADAIRE -->
+            <section class="page-section" id="programme" style="display: none;">
+
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">ACTIVITÉS DU MOUVEMENT</p>
+                        <h2>Programme hebdomadaire</h2>
+                        <p class="section-description">
+                            Consultez les activités prévues chaque semaine.
+                        </p>
+                    </div>
+
+                    <button
+                        type="button"
+                        id="ajouter-activite"
+                        class="primary-button"
+                    >
+                        + Ajouter une activité
+                    </button>
+                </div>
+
+                <div id="formulaire-activite" style="display: none; margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+                    <h3>Ajouter une activité</h3>
+
+                    <form id="form-ajout-activite">
+                        <label for="jour-activite">Jour :</label>
+                        <select id="jour-activite" name="jour" required>
+                            <option value="">Choisir un jour</option>
+                            <option value="Lundi">Lundi</option>
+                            <option value="Mercredi">Mercredi</option>
+                            <option value="Jeudi">Jeudi</option>
+                            <option value="Vendredi">Vendredi</option>
+                            <option value="Samedi">Samedi</option>
+                            <option value="Dimanche">Dimanche</option>
+                        </select>
+
+                        <label for="heure-debut-activite">Heure de début :</label>
+                        <input type="time" id="heure-debut-activite" name="heure_debut" required>
+
+                        <label for="heure-fin-activite">Heure de fin :</label>
+                        <input type="time" id="heure-fin-activite" name="heure_fin" required>
+
+                        <label for="nom-activite">Activité :</label>
+                        <input type="text" id="nom-activite" name="activite" required>
+
+                        <label for="lieu-activite">Lieu :</label>
+                        <input type="text" id="lieu-activite" name="lieu">
+
+                        <label for="observations-activite">Observations :</label>
+                        <textarea id="observations-activite" name="observations"></textarea>
+
+                        <button type="submit">Enregistrer l'activité</button>
+                        <button type="button" id="annuler-activite">Annuler</button>
+                    </form>
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Jour</th>
+                                <th>Heure</th>
+                                <th>Activité</th>
+                                <th>Lieu</th>
+                                <th>Observations</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="liste-programme">
+                            <tr>
+                                <td colspan="6">
+                                    Chargement du programme...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+            </section>
+
+            <!-- LISTE DES MEMBRES -->
+            <section class="liste-membres page-section" id="membres" style="display: none;">
+
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">BASE DES MEMBRES</p>
+                        <h2>Liste des membres</h2>
+                        <p class="section-description">
+                            Recherchez et gérez les membres enregistrés.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="content-card">
+
+                    <div class="table-toolbar">
+                        <div class="recherche-membres">
+                            <input
+                                type="search"
+                                id="recherche"
+                                placeholder="Rechercher par prénom, nom ou téléphone..."
+                                aria-label="Rechercher un membre"
+                            >
+                        </div>
+                    </div>
+
+                    <div class="table-container">
+                        <table>
+
+                            <thead>
+                                <tr>
+                                    <th>Prénom</th>
+                                    <th>Nom</th>
+                                    <th>Téléphone</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+
+                            <tbody id="liste-membres">
+                                <tr>
+                                    <td colspan="4">
+                                        Chargement des membres...
+                                    </td>
+                                </tr>
+                            </tbody>
+
+                        </table>
+                    </div>
+
+                    <div
+                        id="pagination-membres"
+                        class="pagination-membres"
+                    ></div>
+
+                </div>
+            </section>
+
+            <!-- SECTION GESTION DU BUREAU -->
+            <section id="gestion-bureau" class="page-section" style="display: none;">
+
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">ADMINISTRATION</p>
+                        <h2>Gestion du bureau</h2>
+                        <p class="section-description">
+                            Attribuez et gérez les fonctions des membres déjà enregistrés.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="content-card">
+                    <h3>Attribuer une fonction</h3>
+
+                    <form id="form-attribution-bureau">
+
+                        <div class="form-group">
+                            <label for="bureau-membre">Choisir un membre</label>
+                            <select id="bureau-membre" required>
+                                <option value="">Chargement des membres...</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="bureau-fonction">Fonction dans le bureau</label>
+                            <input
+                                type="text"
+                                id="bureau-fonction"
+                                placeholder="Exemple : Président, Secrétaire général..."
+                                required
+                            >
+                        </div>
+
+                        <button type="submit" class="btn-primary">
+                            Attribuer la fonction
+                        </button>
+
+                    </form>
+                </div>
+
+                <div class="content-card">
+                    <h3>Membres du bureau</h3>
+
+                    <div id="liste-bureau">
+                        Chargement des membres du bureau...
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- SECTION MON PROFIL -->
+            <section id="profil" class="page-section" style="display: none;">
+
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">ESPACE PERSONNEL</p>
+                        <h2>Mon profil</h2>
+                        <p class="section-description">
+                            Consultez vos informations personnelles.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="content-card">
+                    <h3>Mes informations</h3>
+
+                    <div id="informations-profil">
+                        Chargement de votre profil...
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- SECTION FORUM -->
+            <section id="forum" class="page-section" style="display: none;">
+
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">ÉCHANGES DU MOUVEMENT</p>
+                        <h2>Forum</h2>
+                        <p class="section-description">
+                            Consultez les publications et les échanges des membres.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="content-card">
+                    <h3>Publications du forum</h3>
+
+                    <div id="liste-publications">
+                        Chargement des publications...
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- PIED DE PAGE -->
+            <footer class="app-footer">
+                <p>Registre Fogny · Gestion des membres</p>
+            </footer>
+
+        </main>
+    </div>
+
+    <!-- BIBLIOTHEQUES -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <!-- SCRIPT PRINCIPAL -->
+    <script src="app.js"></script>
+
+</body>
+</html>

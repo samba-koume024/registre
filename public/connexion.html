@@ -1,0 +1,271 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connexion - Registre Fogny</title>
+  <link rel="stylesheet" href="style.css">
+
+  <style>
+    .connexion-page {
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 25px;
+      background: #f3f7f4;
+    }
+
+    .connexion-card {
+      width: 100%;
+      max-width: 440px;
+      padding: 35px;
+      background: white;
+      border-radius: 14px;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.09);
+    }
+
+    .connexion-card h1 {
+      color: #123d2a;
+      text-align: center;
+      margin-bottom: 8px;
+      font-size: 26px;
+    }
+
+    .connexion-card .description {
+      text-align: center;
+      color: #64748b;
+      margin-bottom: 25px;
+      font-size: 14px;
+    }
+
+    .connexion-card label {
+      display: block;
+      margin: 16px 0 7px;
+      color: #263b30;
+      font-weight: 600;
+    }
+
+    .connexion-card input {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 7px;
+      box-sizing: border-box;
+      font-size: 15px;
+    }
+
+    .connexion-card input:focus {
+      outline: none;
+      border-color: #168044;
+      box-shadow: 0 0 0 3px rgba(22, 128, 68, 0.12);
+    }
+
+    .connexion-card button {
+      width: 100%;
+      padding: 13px;
+      margin-top: 23px;
+      background: #168044;
+      border: none;
+      border-radius: 7px;
+      color: white;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .connexion-card button:hover {
+      background: #123d2a;
+    }
+
+    .connexion-card button:disabled {
+      opacity: 0.65;
+      cursor: wait;
+    }
+
+    .message {
+      display: none;
+      padding: 12px;
+      margin-top: 18px;
+      border-radius: 7px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .message.erreur {
+      display: block;
+      color: #991b1b;
+      background: #fee2e2;
+    }
+
+    .message.succes {
+      display: block;
+      color: #166534;
+      background: #dcfce7;
+    }
+
+    .connexion-card .liens {
+      text-align: center;
+      margin-top: 22px;
+      font-size: 14px;
+    }
+
+    .connexion-card a {
+      color: #168044;
+      font-weight: bold;
+      text-decoration: none;
+    }
+
+    .connexion-card .note {
+      margin-top: 18px;
+      color: #64748b;
+      font-size: 12px;
+      text-align: center;
+    }
+  </style>
+</head>
+
+<body>
+  <main class="connexion-page">
+    <section class="connexion-card">
+      <h1>REGISTRE FOGNY</h1>
+
+      <p class="description">
+        Connectez-vous à votre espace
+      </p>
+
+      <form id="form-connexion">
+
+        <label for="identifiant">
+          Identifiant, téléphone ou e-mail
+        </label>
+
+        <input
+          type="text"
+          id="identifiant"
+          name="identifiant"
+          placeholder="Votre identifiant ou contact"
+          autocomplete="username"
+          required
+        >
+
+        <label for="mot_de_passe">
+          Mot de passe
+        </label>
+
+        <input
+          type="password"
+          id="mot_de_passe"
+          name="mot_de_passe"
+          placeholder="Votre mot de passe"
+          autocomplete="current-password"
+          required
+        >
+
+        <button type="submit" id="bouton-connexion">
+          Se connecter
+        </button>
+
+        <div id="message" class="message" role="alert"></div>
+      </form>
+
+      <div class="liens">
+        Vous n'avez pas encore de compte ?
+        <a href="/inscription.html">Créer un compte</a>
+      </div>
+
+      <p class="note">
+        Registre Fogny — Plateforme de gestion des membres
+      </p>
+    </section>
+  </main>
+
+  <script>
+    const formulaire = document.getElementById("form-connexion");
+    const message = document.getElementById("message");
+    const bouton = document.getElementById("bouton-connexion");
+
+    function afficherMessage(texte, type) {
+      message.textContent = texte;
+      message.className = "message " + type;
+    }
+
+    formulaire.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const identifiant =
+        document.getElementById("identifiant").value.trim();
+
+      const motDePasse =
+        document.getElementById("mot_de_passe").value;
+
+      bouton.disabled = true;
+      bouton.textContent = "Connexion en cours...";
+
+      try {
+        // On essaie d'abord la connexion administrateur.
+        let reponse = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            identifiant,
+            mot_de_passe: motDePasse
+          })
+        });
+
+        let resultat = await reponse.json();
+
+        if (reponse.ok && resultat.succes) {
+          afficherMessage("Connexion réussie.", "succes");
+          window.location.href = "/";
+          return;
+        }
+
+        // Si l'administrateur n'est pas reconnu,
+        // on essaie la connexion membre.
+        reponse = await fetch("/api/auth/connexion-membre", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            identifiant,
+            mot_de_passe: motDePasse
+          })
+        });
+
+        resultat = await reponse.json();
+
+        if (!reponse.ok || !resultat.succes) {
+          afficherMessage(
+            resultat.message || "Identifiant ou mot de passe incorrect.",
+            "erreur"
+          );
+          return;
+        }
+
+        afficherMessage("Connexion réussie.", "succes");
+
+        if (resultat.role === "bureau") {
+          window.location.href = "/bureau.html";
+        } else {
+          window.location.href = "/information.html";
+        }
+
+      } catch (erreur) {
+        console.error(erreur);
+        afficherMessage(
+          "Impossible de contacter le serveur. Réessayez.",
+          "erreur"
+        );
+      } finally {
+        bouton.disabled = false;
+        bouton.textContent = "Se connecter";
+      }
+    });
+  </script>
+</body>
+</html>

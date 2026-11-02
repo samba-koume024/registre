@@ -1,0 +1,313 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Créer un compte - Registre Fogny</title>
+  <link rel="stylesheet" href="style.css">
+
+  <style>
+    .inscription-page {
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 25px;
+      background: #f3f7f4;
+    }
+
+    .inscription-card {
+      width: 100%;
+      max-width: 470px;
+      padding: 35px;
+      background: white;
+      border-radius: 14px;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.09);
+    }
+
+    .inscription-card h1 {
+      color: #123d2a;
+      text-align: center;
+      margin-bottom: 8px;
+      font-size: 25px;
+    }
+
+    .inscription-card .description {
+      text-align: center;
+      color: #64748b;
+      margin-bottom: 25px;
+      font-size: 14px;
+    }
+
+    .inscription-card label {
+      display: block;
+      margin: 15px 0 7px;
+      font-weight: 600;
+      color: #263b30;
+    }
+
+    .inscription-card input {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 7px;
+      font-size: 15px;
+      box-sizing: border-box;
+    }
+
+    .inscription-card input:focus {
+      outline: none;
+      border-color: #168044;
+      box-shadow: 0 0 0 3px rgba(22, 128, 68, 0.12);
+    }
+
+    .inscription-card button {
+      width: 100%;
+      margin-top: 22px;
+      padding: 13px;
+      border: none;
+      border-radius: 7px;
+      background: #168044;
+      color: white;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .inscription-card button:hover {
+      background: #123d2a;
+    }
+
+    .inscription-card button:disabled {
+      opacity: 0.65;
+      cursor: wait;
+    }
+
+    .message {
+      display: none;
+      padding: 12px;
+      border-radius: 7px;
+      margin-top: 18px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .message.erreur {
+      display: block;
+      color: #991b1b;
+      background: #fee2e2;
+    }
+
+    .message.succes {
+      display: block;
+      color: #166534;
+      background: #dcfce7;
+    }
+
+    .inscription-card .liens {
+      margin-top: 22px;
+      text-align: center;
+      font-size: 14px;
+    }
+
+    .inscription-card a {
+      color: #168044;
+      font-weight: bold;
+      text-decoration: none;
+    }
+
+    .inscription-card .note {
+      margin-top: 15px;
+      color: #64748b;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+
+<body>
+  <main class="inscription-page">
+    <section class="inscription-card">
+      <h1>REGISTRE FOGNY</h1>
+
+      <p class="description">
+        Créez votre compte membre
+      </p>
+
+      <form id="form-inscription">
+        <label for="prenom">Prénom</label>
+        <input
+          type="text"
+          id="prenom"
+          name="prenom"
+          placeholder="Votre prénom"
+          autocomplete="given-name"
+          required
+        >
+
+        <label for="nom">Nom</label>
+        <input
+          type="text"
+          id="nom"
+          name="nom"
+          placeholder="Votre nom"
+          autocomplete="family-name"
+          required
+        >
+
+        <label for="telephone">Téléphone</label>
+        <input
+          type="tel"
+          id="telephone"
+          name="telephone"
+          placeholder="Exemple : 771234567"
+          inputmode="numeric"
+          pattern="[0-9]{9}"
+          maxlength="9"
+          autocomplete="tel"
+        >
+
+        <label for="email">Adresse e-mail</label>
+        <input
+          type="email"
+          id="email"
+          name="email"
+          placeholder="Exemple : nom@email.com"
+          autocomplete="email"
+        >
+
+        <label for="mot_de_passe">Mot de passe</label>
+        <input
+          type="password"
+          id="mot_de_passe"
+          name="mot_de_passe"
+          placeholder="Au moins 8 caractères"
+          minlength="8"
+          autocomplete="new-password"
+          required
+        >
+
+        <label for="confirmation">Confirmer le mot de passe</label>
+        <input
+          type="password"
+          id="confirmation"
+          name="confirmation"
+          placeholder="Répétez votre mot de passe"
+          minlength="8"
+          autocomplete="new-password"
+          required
+        >
+
+        <button type="submit" id="bouton-inscription">
+          Créer mon compte
+        </button>
+
+        <div id="message" class="message" role="alert"></div>
+      </form>
+
+      <p class="note">
+        Vous devez déjà être enregistré dans le Registre Fogny.
+        Renseignez au moins votre téléphone ou votre adresse e-mail,
+        tels qu'ils figurent sur votre fiche membre.
+      </p>
+
+      <div class="liens">
+        Vous avez déjà un compte ?
+        <a href="/connexion.html">Se connecter</a>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const formulaire = document.getElementById("form-inscription");
+    const message = document.getElementById("message");
+    const bouton = document.getElementById("bouton-inscription");
+
+    function afficherMessage(texte, type) {
+      message.textContent = texte;
+      message.className = "message " + type;
+    }
+
+    formulaire.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const prenom = document.getElementById("prenom").value.trim();
+      const nom = document.getElementById("nom").value.trim();
+      const telephone = document.getElementById("telephone").value.trim();
+      const email = document.getElementById("email").value.trim();
+      const motDePasse = document.getElementById("mot_de_passe").value;
+      const confirmation = document.getElementById("confirmation").value;
+
+      if (!telephone && !email) {
+        afficherMessage(
+          "Renseignez au moins un numéro de téléphone ou une adresse e-mail.",
+          "erreur"
+        );
+        return;
+      }
+
+      if (motDePasse !== confirmation) {
+        afficherMessage(
+          "Les deux mots de passe ne correspondent pas.",
+          "erreur"
+        );
+        return;
+      }
+
+      bouton.disabled = true;
+      bouton.textContent = "Création en cours...";
+
+      try {
+        const reponse = await fetch("/api/auth/inscription-membre", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            prenom,
+            nom,
+            telephone,
+            email,
+            mot_de_passe: motDePasse
+          })
+        });
+
+        const resultat = await reponse.json();
+        console.log("Réponse du serveur :", resultat);
+
+        if (!reponse.ok || !resultat.succes) {
+          afficherMessage(
+            resultat.message || "La création du compte a échoué.",
+            "erreur"
+          );
+          return;
+        }
+
+        afficherMessage(
+          resultat.message + " Vous allez être redirigé...",
+          "succes"
+        );
+
+        setTimeout(() => {
+          if (resultat.role === "bureau") {
+            window.location.href = "/bureau.html";
+          } else {
+            window.location.href = "/information.html";
+          }
+        }, 1200);
+
+      } catch (erreur) {
+        console.error(erreur);
+        afficherMessage(
+          "Impossible de contacter le serveur. Réessayez.",
+          "erreur"
+        );
+      } finally {
+        bouton.disabled = false;
+        bouton.textContent = "Créer mon compte";
+      }
+    });
+  </script>
+</body>
+</html>
