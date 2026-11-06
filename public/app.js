@@ -50,36 +50,6 @@ function actualiserStatistiques() {
     document.getElementById("inscriptions-mois").textContent =
         inscriptionsMois;
 
-    // Répartition par fonction
-    const fonctions = {};
-
-    tousLesMembres.forEach(membre => {
-        const fonction = membre.fonction?.trim() || "Non renseignée";
-        fonctions[fonction] = (fonctions[fonction] || 0) + 1;
-    });
-
-    const listeFonctions = document.getElementById(
-        "repartition-fonctions"
-    );
-
-    listeFonctions.replaceChildren();
-
-    const fonctionsTriees = Object.entries(fonctions)
-        .sort((a, b) => b[1] - a[1]);
-
-    if (fonctionsTriees.length === 0) {
-        const element = document.createElement("li");
-        element.textContent = "Aucun membre enregistré.";
-        listeFonctions.appendChild(element);
-    } else {
-        fonctionsTriees.forEach(([fonction, nombre]) => {
-            const element = document.createElement("li");
-            element.textContent =
-                `${fonction} : ${nombre} membre(s)`;
-            listeFonctions.appendChild(element);
-        });
-    }
-
     // Graphique circulaire hommes / femmes
     const canvas = document.getElementById("graphique-sexe");
 
@@ -173,7 +143,8 @@ function ouvrirCarteMembre(membre) {
         ["Téléphone", membre.telephone],
         ["E-mail", membre.email],
         ["Profession", membre.profession],
-        ["Fonction", membre.fonction]
+        ["Fonction", membre.fonction],
+        ["Catégorie", membre.categorie],
     ];
 
     const contenu = informations.map(([titre, valeur]) => `
@@ -466,11 +437,6 @@ async function modifierMembre(membre) {
     );
     if (profession === null) return;
 
-    const fonction = prompt(
-        "Fonction dans le mouvement :",
-        membre.fonction || ""
-    );
-    if (fonction === null) return;
 
     if (!prenom.trim() || !nom.trim()) {
         alert("Le prénom et le nom sont obligatoires.");
@@ -522,7 +488,6 @@ async function modifierMembre(membre) {
         telephone: telephoneNettoye || null,
         email: emailNettoye || null,
         profession: profession.trim(),
-        fonction: fonction.trim()
     };
 
     try {
@@ -653,10 +618,8 @@ formulaire.addEventListener("submit", async event => {
             formulaire.elements["date_naissance"].value || null,
         telephone:
             formulaire.elements["telephone"].value.trim(),
-        profession:
-            formulaire.elements["profession"].value.trim(),
-        fonction:
-            formulaire.elements["fonction"].value.trim()
+               profession:
+            formulaire.elements["profession"].value.trim()
     };
 
     try {
@@ -713,7 +676,9 @@ if (boutonDeconnexion) {
         }
     });
 }// =====================================
+// =====================================
 // NAVIGATION ENTRE LES PAGES
+// =====================================
 
 const liensNavigation = document.querySelectorAll(
     ".sidebar-nav .nav-link"
@@ -721,43 +686,12 @@ const liensNavigation = document.querySelectorAll(
 
 const pages = document.querySelectorAll(".page-section");
 
-// Au démarrage, afficher uniquement le tableau de bord
+// Afficher le tableau de bord au démarrage
 pages.forEach(page => {
     page.style.display = page.id === "dashboard" ? "block" : "none";
 });
 
-liensNavigation.forEach(lien => {
-    lien.addEventListener("click", evenement => {
-        console.log("CLIC DÉTECTÉ");
-        evenement.preventDefault();
-
-        const idPage = lien.getAttribute("href").substring(1);
-        const pageChoisie = document.getElementById(idPage);
-        console.log(pageChoisie);
-
-        if (!pageChoisie || !pageChoisie.classList.contains("page-section")) {
-            return;
-        }
-
-        // Masquer toutes les pages
-        pages.forEach(page => {
-            page.style.display = "none";
-        });
-
-        // Afficher uniquement la page choisie
-        pageChoisie.style.display = "block";
-        console.log("Affichage :", pageChoisie.style.display);
-
-        // Mettre à jour le menu actif
-        liensNavigation.forEach(element => {
-            element.classList.remove("active");
-        });
-
-        lien.classList.add("active");
-    });
-});
-
-// Gérer les clics sur le menu
+// Navigation avec un seul gestionnaire par lien
 liensNavigation.forEach(lien => {
     lien.addEventListener("click", evenement => {
         evenement.preventDefault();
@@ -782,10 +716,13 @@ liensNavigation.forEach(lien => {
 
         lien.classList.add("active");
 
-        // Actualiser les données lorsque nécessaire
         if (identifiant === "gestion-bureau") {
             chargerMembresPourBureau();
             chargerListeBureau();
+        }
+
+        if (identifiant === "acces" && window.chargerAcces) {
+            window.chargerAcces();
         }
 
         if (identifiant === "forum") {

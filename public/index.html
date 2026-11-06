@@ -23,49 +23,59 @@
                 </div>
             </div>
 
-            <nav class="sidebar-nav" aria-label="Navigation principale">
+           <nav class="sidebar-nav" aria-label="Navigation principale">
 
-                <a href="#dashboard" class="nav-link active">
-                    <span class="nav-icon">▦</span>
-                    Tableau de bord
-                </a>
+    <a href="#dashboard" class="nav-link active">
+        <span class="nav-icon">▦</span>
+        Tableau de bord
+    </a>
 
-                <a href="#inscription" class="nav-link">
-                    <span class="nav-icon">＋</span>
-                    Inscrire un membre
-                </a>
+    <a href="#inscription" class="nav-link">
+        <span class="nav-icon">＋</span>
+        Inscrire un membre
+    </a>
 
-                <a href="#membres" class="nav-link">
-                    <span class="nav-icon">♙</span>
-                    Liste des membres
-                </a>
+    <a href="#membres" class="nav-link">
+        <span class="nav-icon">♙</span>
+        Liste des membres
+    </a>
 
-                <a href="#statistiques" class="nav-link">
-                    <span class="nav-icon">▥</span>
-                    Statistiques
-                </a>
+    <a href="#programme" class="nav-link">
+        <span class="nav-icon">▣</span>
+        Programmes hebdomadaires
+    </a>
 
-                <a href="#programme" class="nav-link">
-                    <span class="nav-icon">▦</span>
-                    Programme hebdomadaire
-                </a>
+    <a href="#pointages" class="nav-link">
+        <span class="nav-icon">✓</span>
+        Pointages
+    </a>
 
-                <a href="#forum" class="nav-link">
-                    <span class="nav-icon">✉</span>
-                    Forum
-                </a>
+    <a href="#supervisions" class="nav-link">
+        <span class="nav-icon">◷</span>
+        Supervisions
+    </a>
 
-                <a href="#profil" class="nav-link">
-                    <span class="nav-icon">♙</span>
-                    Mon profil
-                </a>
+    <a href="#rapports" class="nav-link">
+        <span class="nav-icon">▤</span>
+        Rapports
+    </a>
 
-                <a href="#gestion-bureau" class="nav-link">
-                    <span class="nav-icon">♙</span>
-                    Gestion du bureau
-                </a>
+    <a href="#reunions" class="nav-link">
+        <span class="nav-icon">▧</span>
+        Réunions
+    </a>
 
-            </nav>
+    <a href="#acces" class="nav-link">
+        <span class="nav-icon">♙</span>
+        Rôles et permissions
+    </a>
+
+    <a href="#gestion-bureau" class="nav-link">
+        <span class="nav-icon">♙</span>
+        Gestion du Bureau
+    </a>
+
+</nav>
 
             <div class="sidebar-footer">
                 <span class="status-dot"></span>
@@ -152,42 +162,28 @@
                 </div>
             </section>
 
-            <!-- GRAPHIQUES -->
-            <section class="charts-section page-section" id="statistiques" style="display: none;">
+           <!-- GRAPHIQUE DU TABLEAU DE BORD -->
+<div class="charts-section">
+    <div class="section-heading">
+        <div>
+            <p class="eyebrow">ANALYSE</p>
+            <h2>Statistiques du mouvement</h2>
+        </div>
+    </div>
 
-                <div class="section-heading">
-                    <div>
-                        <p class="eyebrow">ANALYSE</p>
-                        <h2>Statistiques du mouvement</h2>
-                    </div>
-                </div>
+    <div class="charts-grid">
+        <div class="graphique-container">
+            <h3>Répartition par sexe</h3>
+            <p class="chart-description">
+                Proportion des hommes et des femmes.
+            </p>
 
-                <div class="charts-grid">
-
-                    <div class="graphique-container">
-                        <h3>Répartition par sexe</h3>
-                        <p class="chart-description">
-                            Proportion des hommes et des femmes.
-                        </p>
-
-                        <div class="graphique-camembert">
-                            <canvas id="graphique-sexe"></canvas>
-                        </div>
-                    </div>
-
-                    <div class="stats-fonctions">
-                        <h3>Répartition par fonction</h3>
-                        <p class="chart-description">
-                            Effectifs selon la fonction déclarée.
-                        </p>
-
-                        <ul id="repartition-fonctions">
-                            <li>Chargement des statistiques...</li>
-                        </ul>
-                    </div>
-
-                </div>
-            </section>
+            <div class="graphique-camembert">
+                <canvas id="graphique-sexe"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
 
             <!-- FORMULAIRE D'INSCRIPTION -->
             <section class="form-section page-section" id="inscription" style="display: none;">
@@ -248,6 +244,7 @@
                                 </select>
                             </div>
 
+
                             <div class="form-group">
                                 <label for="date_naissance">Date de naissance</label>
                                 <input
@@ -304,16 +301,6 @@
                                     id="profession"
                                     name="profession"
                                     placeholder="Ex. : Étudiant"
-                                >
-                            </div>
-
-                            <div class="form-group form-group-full">
-                                <label for="fonction">Fonction dans le mouvement</label>
-                                <input
-                                    type="text"
-                                    id="fonction"
-                                    name="fonction"
-                                    placeholder="Ex. : Président, secrétaire, membre"
                                 >
                             </div>
 
@@ -575,6 +562,90 @@
             </section>
 
             <!-- PIED DE PAGE -->
+             <!-- SECTION POINTAGES -->
+<section id="acces" class="page-section" style="display: none;">
+    <div class="section-heading">
+        <div>
+            <p class="eyebrow">ADMINISTRATION</p>
+            <h2>Rôles et permissions</h2>
+            <p class="section-description">
+                Gérez les administrateurs, les rôles et les droits des membres.
+            </p>
+        </div>
+    </div>
+    <div id="acces-contenu">Chargement...</div>
+</section>
+
+<section id="pointages" class="page-section" style="display: none;">
+    <div class="section-heading">
+        <div>
+            <p class="eyebrow">SUIVI DES ACTIVITÉS</p>
+            <h2>Pointages</h2>
+            <p class="section-description">
+                Enregistrement et suivi des présences et des absences.
+            </p>
+        </div>
+    </div>
+
+    <div class="content-card">
+        <h3>Gestion des présences</h3>
+        <p>Le module de pointage sera développé ici.</p>
+    </div>
+</section>
+
+<!-- SECTION SUPERVISIONS -->
+<section id="supervisions" class="page-section" style="display: none;">
+    <div class="section-heading">
+        <div>
+            <p class="eyebrow">CONTRÔLE ET SUIVI</p>
+            <h2>Supervisions</h2>
+            <p class="section-description">
+                Analyse des absences, des retards et de la participation.
+            </p>
+        </div>
+    </div>
+
+    <div class="content-card">
+        <h3>Suivi des participations</h3>
+        <p>Le module de supervision sera développé ici.</p>
+    </div>
+</section>
+
+<!-- SECTION RAPPORTS -->
+<section id="rapports" class="page-section" style="display: none;">
+    <div class="section-heading">
+        <div>
+            <p class="eyebrow">DOCUMENTATION</p>
+            <h2>Rapports</h2>
+            <p class="section-description">
+                Consultation et exportation des rapports du mouvement.
+            </p>
+        </div>
+    </div>
+
+    <div class="content-card">
+        <h3>Rapports du mouvement</h3>
+        <p>Le module de rapports sera développé ici.</p>
+    </div>
+</section>
+
+<!-- SECTION RÉUNIONS -->
+<section id="reunions" class="page-section" style="display: none;">
+    <div class="section-heading">
+        <div>
+            <p class="eyebrow">ORGANISATION DU BUREAU</p>
+            <h2>Réunions</h2>
+            <p class="section-description">
+                Gestion des convocations, des participants et des procès-verbaux.
+            </p>
+        </div>
+    </div>
+
+    <div class="content-card">
+        <h3>Gestion des réunions</h3>
+        <p>Le module de réunions sera développé ici.</p>
+    </div>
+</section>
             <footer class="app-footer">
                 <p>Registre Fogny · Gestion des membres</p>
             </footer>
@@ -591,6 +662,7 @@
 
     <!-- SCRIPT PRINCIPAL -->
     <script src="app.js"></script>
+    <script src="acces.js"></script>
 
 </body>
 </html>

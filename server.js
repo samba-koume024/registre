@@ -151,19 +151,108 @@ function exigerMembreConnecte(req, res, next) {
 }
 
 function exigerBureauOuAdministrateur(req, res, next) {
-  if (
-    !req.session.administrateur &&
-    (!req.session.membre || req.session.membre.role !== "bureau")
-  ) {
-    return reponseErreur(
-      res,
-      "Cette fonctionnalité est réservée aux membres du bureau.",
-      403
-    );
+  return exigerPermission("bureau.consulter")(req, res, next);
+}
+
+// ======================================================
+// 5. SYSTEME DE PERMISSIONS DYNAMIQUES
+// ======================================================
+
+async function verifierPermission(membreId, codePermission) {
+  const idMembre = String(membreId);
+
+  // 1. Rechercher la permission
+  const { data: permission, error: erreurPermission } = await supabase
+    .from("rf_permissions")
+    .select("id")
+    .eq("code", codePermission)
+    .maybeSingle();
+
+  if (erreurPermission) throw erreurPermission;
+  if (!permission) return false;
+
+  // 2. Vérifier une éventuelle exception individuelle
+  const { data: exception, error: erreurException } = await supabase
+    .from("rf_membre_permissions")
+    .select("decision")
+    .eq("membre_id", idMembre)
+    .eq("permission_id", permission.id)
+    .maybeSingle();
+
+  if (erreurException) throw erreurException;
+
+  // Une décision individuelle est prioritaire
+  if (exception) {
+    return exception.decision === "autoriser";
   }
 
-  next();
+  // 3. Récupérer le rôle du membre
+  const { data: attribution, error: erreurRole } = await supabase
+    .from("rf_membre_roles")
+    .select("role_id")
+    .eq("membre_id", idMembre)
+    .maybeSingle();
+
+  if (erreurRole) throw erreurRole;
+  if (!attribution) return false;
+
+  // 4. Vérifier la permission du rôle
+  const { data: autorisation, error: erreurAutorisation } = await supabase
+    .from("rf_role_permissions")
+    .select("id")
+    .eq("role_id", attribution.role_id)
+    .eq("permission_id", permission.id)
+    .maybeSingle();
+
+  if (erreurAutorisation) throw erreurAutorisation;
+
+  return Boolean(autorisation);
 }
+
+// Middleware réutilisable pour protéger les routes
+function exigerPermission(codePermission) {
+  return async (req, res, next) => {
+    // Tous les administrateurs ont automatiquement tous les droits
+    if (req.session.administrateur) {
+      return next();
+    }
+
+    // Vérifier la connexion du membre
+    if (!req.session.membre) {
+      return reponseErreur(
+        res,
+        "Vous devez être connecté.",
+        401
+      );
+    }
+
+    try {
+      const autorise = await verifierPermission(
+        req.session.membre.membre_id,
+        codePermission
+      );
+
+      if (!autorise) {
+        return reponseErreur(
+          res,
+          "Vous n'avez pas la permission nécessaire.",
+          403
+        );
+      }
+
+      next();
+    } catch (erreur) {
+      console.error("Erreur de vérification des permissions :", erreur);
+
+      return reponseErreur(
+        res,
+        "Impossible de vérifier vos permissions.",
+        500
+      );
+    }
+  };
+}
+
 
 // ======================================================
 // 5. DÉTERMINER LE RÔLE D'UN MEMBRE
@@ -775,7 +864,7 @@ app.post("/api/auth/connexion-membre", limiteConnexion, async (req, res) => {
       );
     }
 
-    const role = await determinerRoleMembre(membre);
+    let role = await determinerRoleMembre(membre);
 
     await ouvrirSessionMembre(
       req,
@@ -784,6 +873,25 @@ app.post("/api/auth/connexion-membre", limiteConnexion, async (req, res) => {
       compte,
       role
     );
+
+    // Un membre promu administrateur obtient tous les droits.
+    const { data: promotion } = await supabase
+      .from("rf_membres_administrateurs")
+      .select("membre_id")
+      .eq("membre_id", String(membre.id))
+      .maybeSingle();
+
+    if (promotion) {
+      req.session.administrateur = {
+        id: `membre-${membre.id}`,
+        identifiant: `${membre.prenom} ${membre.nom}`,
+        membre_id: membre.id
+      };
+      await new Promise((ok, ko) =>
+        req.session.save(e => (e ? ko(e) : ok()))
+      );
+      role = "administrateur";
+    }
 
     res.json({
       succes: true,
@@ -1075,15 +1183,46 @@ app.post(
       const prenom = nettoyerTexte(req.body.prenom);
       const nom = nettoyerTexte(req.body.nom);
       const sexe = nettoyerTexte(req.body.sexe);
+      const dateNaissance = nettoyerTexte(req.body.date_naissance);
       const telephone = normaliserTelephone(req.body.telephone);
       const email = normaliserEmail(req.body.email);
 
-      if (!prenom || !nom || !sexe) {
-        return reponseErreur(
-          res,
-          "Le prénom, le nom et le sexe sont obligatoires."
-        );
-      }
+      if (!prenom || !nom || !sexe || !dateNaissance) {
+  return reponseErreur(
+    res,
+    "Le prénom, le nom, le sexe et la date de naissance sont obligatoires."
+  );
+}
+
+const dateValide = /^\d{4}-\d{2}-\d{2}$/.test(dateNaissance);
+
+if (!dateValide || Number.isNaN(Date.parse(dateNaissance))) {
+  return reponseErreur(res, "Date de naissance invalide.");
+}
+const naissance = new Date(`${dateNaissance}T00:00:00`);
+const aujourdHui = new Date();
+
+let age = aujourdHui.getFullYear() - naissance.getFullYear();
+
+if (
+  aujourdHui.getMonth() < naissance.getMonth() ||
+  (aujourdHui.getMonth() === naissance.getMonth() &&
+   aujourdHui.getDate() < naissance.getDate())
+) {
+  age--;
+}
+
+let categorie;
+
+if (age < 25) {
+  categorie = "Cadets";
+} else if (sexe === "Masculin") {
+  categorie = "Hommes";
+} else if (sexe === "Féminin") {
+  categorie = "Femmes";
+} else {
+  return reponseErreur(res, "Sexe invalide.");
+}
 
       if (!telephone && !email) {
         return reponseErreur(
@@ -1104,15 +1243,15 @@ app.post(
       }
 
       const nouveauMembre = {
-        prenom,
-        nom,
-        sexe,
-        telephone: telephone || null,
-        email: email || null,
-        date_naissance: req.body.date_naissance || null,
-        profession: nettoyerTexte(req.body.profession) || null,
-        fonction: nettoyerTexte(req.body.fonction) || null
-      };
+  prenom,
+  nom,
+  sexe,
+  categorie,
+  telephone: telephone || null,
+  email: email || null,
+  date_naissance: dateNaissance,
+  profession: nettoyerTexte(req.body.profession) || null
+};
 
       const { data, error } = await supabase
         .from("membres")
@@ -1382,21 +1521,53 @@ app.put(
 
       if (!Number.isInteger(id) || id <= 0) {
         return reponseErreur(res, "Identifiant invalide.");
-      }
+       }
+     const prenom = nettoyerTexte(req.body.prenom);
+const nom = nettoyerTexte(req.body.nom);
+const sexe = nettoyerTexte(req.body.sexe);
+const dateNaissance = nettoyerTexte(req.body.date_naissance);
+const telephone = normaliserTelephone(req.body.telephone);
+const email = normaliserEmail(req.body.email);
 
-      const prenom = nettoyerTexte(req.body.prenom);
-      const nom = nettoyerTexte(req.body.nom);
-      const sexe = nettoyerTexte(req.body.sexe);
-      const telephone = normaliserTelephone(req.body.telephone);
-      const email = normaliserEmail(req.body.email);
+if (!prenom || !nom || !sexe || !dateNaissance) {
+  return reponseErreur(
+    res,
+    "Le prénom, le nom, le sexe et la date de naissance sont obligatoires."
+  );
+}
 
-      if (!prenom || !nom || !sexe) {
-        return reponseErreur(
-          res,
-          "Le prénom, le nom et le sexe sont obligatoires."
-        );
-      }
+if (!["Masculin", "Féminin"].includes(sexe)) {
+  return reponseErreur(res, "Sexe invalide.");
+}
 
+const dateValide = /^\d{4}-\d{2}-\d{2}$/.test(dateNaissance);
+
+if (!dateValide || Number.isNaN(Date.parse(dateNaissance))) {
+  return reponseErreur(res, "Date de naissance invalide.");
+}
+
+const naissance = new Date(`${dateNaissance}T00:00:00`);
+const aujourdHui = new Date();
+
+let age = aujourdHui.getFullYear() - naissance.getFullYear();
+
+if (
+  aujourdHui.getMonth() < naissance.getMonth() ||
+  (aujourdHui.getMonth() === naissance.getMonth() &&
+   aujourdHui.getDate() < naissance.getDate())
+) {
+  age--;
+}
+
+let categorie;
+
+if (age < 25) {
+  categorie = "Cadets";
+} else if (sexe === "Masculin") {
+  categorie = "Hommes";
+} else {
+  categorie = "Femmes";
+}
       if (!telephone && !email) {
         return reponseErreur(
           res,
@@ -1419,11 +1590,11 @@ app.put(
         prenom,
         nom,
         sexe,
+        categorie,
         telephone: telephone || null,
         email: email || null,
-        date_naissance: req.body.date_naissance || null,
-        profession: nettoyerTexte(req.body.profession) || null,
-        fonction: nettoyerTexte(req.body.fonction) || null
+        date_naissance: dateNaissance,
+        profession: nettoyerTexte(req.body.profession) || null
       };
 
       const { data, error } = await supabase
@@ -1509,258 +1680,529 @@ app.delete(
 // ======================================================
 
 // ======================================================
-// 22. FORUM : PUBLICATIONS
+
+
+
+// ======================================================
+// 22. GESTION DES RÔLES ET DES PERMISSIONS
 // ======================================================
 
-// Vérifier qu'un membre du bureau est connecté.
-function exigerMembreDuBureau(req, res, next) {
-  if (req.session.administrateur) {
-    return next();
-  }
-
-  if (!req.session.membre || req.session.membre.role !== "bureau") {
-    return reponseErreur(
-      res,
-      "Cette action est réservée aux membres du bureau.",
-      403
-    );
-  }
-
-  next();
+function uuidValide(valeur) {
+  return typeof valeur === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(valeur);
 }
 
-// 1. CONSULTER LES PUBLICATIONS
-app.get(
-  "/api/forum/publications",
-  exigerBureauOuAdministrateur,
-  async (req, res) => {
-    try {
-      const { data, error } = await supabase
-        .from("forum_publications")
-        .select("*")
-        .order("date_creation", { ascending: false });
+// Consulter le catalogue des permissions.
+app.get("/api/permissions", exigerAdministrateur, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("rf_permissions")
+      .select("id, code, nom, description, module")
+      .order("module", { ascending: true })
+      .order("nom", { ascending: true });
 
-      if (error) {
-        console.error(error);
-        return reponseErreur(
-          res,
-          "Impossible de charger les publications.",
-          500
-        );
-      }
-
-      const membreIds = [...new Set(
-        (data || []).map(p => p.membre_id)
-      )];
-
-      let membres = [];
-
-      if (membreIds.length > 0) {
-        const resultat = await supabase
-          .from("membres")
-          .select("id, prenom, nom")
-          .in("id", membreIds);
-
-        if (resultat.error) {
-          console.error(resultat.error);
-          return reponseErreur(res, "Impossible de charger les auteurs.", 500);
-        }
-
-        membres = resultat.data || [];
-      }
-
-      const publications = (data || []).map(p => {
-        const auteur = membres.find(m => m.id === p.membre_id);
-
-        return {
-          ...p,
-          auteur: auteur
-            ? `${auteur.prenom} ${auteur.nom}`
-            : "Membre du bureau",
-          est_auteur:
-            req.session.membre?.membre_id === p.membre_id
-        };
-      });
-
-      res.json({
-        succes: true,
-        publications
-      });
-    } catch (erreur) {
-      console.error(erreur);
-      reponseErreur(res, "Erreur serveur.", 500);
+    if (error) {
+      console.error("Erreur catalogue permissions :", error);
+      return reponseErreur(res, "Impossible de charger les permissions.", 500);
     }
+
+    res.json(data || []);
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Erreur serveur.", 500);
   }
-);
+});
 
-// 2. PUBLIER UNE OPINION OU UNE OBSERVATION
-app.post(
-  "/api/forum/publications",
-  exigerMembreDuBureau,
-  async (req, res) => {
-    try {
-      const membreId = req.session.membre.membre_id;
-      const contenu = nettoyerTexte(req.body.contenu);
+// Consulter les rôles avec les permissions qui leur sont associées.
+app.get("/api/roles", exigerAdministrateur, async (req, res) => {
+  try {
+    const [{ data: roles, error: erreurRoles }, { data: liens, error: erreurLiens }] =
+      await Promise.all([
+        supabase
+          .from("rf_roles")
+          .select("id, nom, description, est_systeme, date_creation")
+          .order("est_systeme", { ascending: false })
+          .order("nom", { ascending: true }),
+        supabase
+          .from("rf_role_permissions")
+          .select("role_id, permission_id")
+      ]);
 
-      if (!contenu) {
-        return reponseErreur(res, "Le contenu de la publication est obligatoire.");
-      }
-
-      if (contenu.length > 5000) {
-        return reponseErreur(res, "La publication ne doit pas dépasser 5000 caractères.");
-      }
-
-      const { data, error } = await supabase
-        .from("forum_publications")
-        .insert({
-          membre_id: membreId,
-          contenu: contenu
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error(error);
-        return reponseErreur(res, "Impossible de publier votre message.", 500);
-      }
-
-      res.status(201).json({
-        succes: true,
-        message: "Publication enregistrée.",
-        publication: data
-      });
-    } catch (erreur) {
-      console.error(erreur);
-      reponseErreur(res, "Erreur serveur.", 500);
+    if (erreurRoles || erreurLiens) {
+      console.error(erreurRoles || erreurLiens);
+      return reponseErreur(res, "Impossible de charger les rôles.", 500);
     }
+
+    const rolesAvecPermissions = (roles || []).map(role => ({
+      ...role,
+      permission_ids: (liens || [])
+        .filter(lien => lien.role_id === role.id)
+        .map(lien => lien.permission_id)
+    }));
+
+    res.json(rolesAvecPermissions);
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Erreur serveur.", 500);
   }
-);
+});
 
-// 3. MODIFIER SA PROPRE PUBLICATION
+// Créer un rôle personnalisé.
+app.post("/api/roles", exigerAdministrateur, async (req, res) => {
+  try {
+    const nom = nettoyerTexte(req.body.nom);
+    const description = nettoyerTexte(req.body.description);
 
-app.put(
-  "/api/forum/publications/:id",
-  exigerBureauOuAdministrateur,
-  async (req, res) => {
-    try {
-      const id = Number(req.params.id);
-      const contenu = nettoyerTexte(req.body.contenu);
-      const estAdministrateur = Boolean(req.session.administrateur);
-
-      if (!Number.isInteger(id) || id <= 0) {
-        return reponseErreur(res, "Identifiant invalide.");
-      }
-
-      if (!contenu) {
-        return reponseErreur(res, "Le contenu est obligatoire.");
-      }
-
-      if (contenu.length > 5000) {
-        return reponseErreur(
-          res,
-          "La publication ne doit pas dépasser 5000 caractères."
-        );
-      }
-
-      let requete = supabase
-        .from("forum_publications")
-        .update({
-          contenu,
-          date_modification: new Date().toISOString()
-        })
-        .eq("id", id);
-
-      // Un membre du bureau ne peut modifier que sa publication.
-      // L'administrateur peut modifier toutes les publications.
-      if (!estAdministrateur) {
-        const membreId = req.session.membre.membre_id;
-        requete = requete.eq("membre_id", membreId);
-      }
-
-      const { data, error } = await requete
-        .select()
-        .maybeSingle();
-
-      if (error) {
-        console.error(error);
-        return reponseErreur(
-          res,
-          "Impossible de modifier la publication.",
-          500
-        );
-      }
-
-      if (!data) {
-        return reponseErreur(
-          res,
-          "Publication introuvable ou vous n'avez pas les droits nécessaires.",
-          404
-        );
-      }
-
-      res.json({
-        succes: true,
-        message: "Publication modifiée.",
-        publication: data
-      });
-    } catch (erreur) {
-      console.error(erreur);
-      reponseErreur(res, "Erreur serveur.", 500);
+    if (!nom || nom.length < 2 || nom.length > 50) {
+      return reponseErreur(res, "Le nom du rôle doit contenir entre 2 et 50 caractères.");
     }
-  }
-);
 
+    const { data, error } = await supabase
+      .from("rf_roles")
+      .insert({
+        nom,
+        description: description || null,
+        est_systeme: false
+      })
+      .select("id, nom, description, est_systeme, date_creation")
+      .single();
 
-// 4. SUPPRIMER SA PROPRE PUBLICATION
-
-app.delete(
-  "/api/forum/publications/:id",
-  exigerBureauOuAdministrateur,
-  async (req, res) => {
-    try {
-      const id = Number(req.params.id);
-      const estAdministrateur = Boolean(req.session.administrateur);
-
-      if (!Number.isInteger(id) || id <= 0) {
-        return reponseErreur(res, "Identifiant invalide.");
+    if (error) {
+      if (error.code === "23505") {
+        return reponseErreur(res, "Un rôle porte déjà ce nom.");
       }
+      console.error(error);
+      return reponseErreur(res, "Impossible de créer le rôle.", 500);
+    }
 
-      let requete = supabase
-        .from("forum_publications")
+    res.status(201).json({
+      succes: true,
+      message: "Rôle créé.",
+      role: { ...data, permission_ids: [] }
+    });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Erreur serveur.", 500);
+  }
+});
+
+// Modifier le nom et la description d'un rôle personnalisé.
+app.put("/api/roles/:id", exigerAdministrateur, async (req, res) => {
+  try {
+    const roleId = req.params.id;
+    const nom = nettoyerTexte(req.body.nom);
+    const description = nettoyerTexte(req.body.description);
+
+    if (!uuidValide(roleId)) {
+      return reponseErreur(res, "Identifiant de rôle invalide.");
+    }
+
+    if (!nom || nom.length < 2 || nom.length > 50) {
+      return reponseErreur(res, "Le nom du rôle doit contenir entre 2 et 50 caractères.");
+    }
+
+    const { data: roleExistant, error: erreurRecherche } = await supabase
+      .from("rf_roles")
+      .select("id, est_systeme")
+      .eq("id", roleId)
+      .maybeSingle();
+
+    if (erreurRecherche) {
+      console.error(erreurRecherche);
+      return reponseErreur(res, "Impossible de vérifier le rôle.", 500);
+    }
+    if (!roleExistant) return reponseErreur(res, "Rôle introuvable.", 404);
+    if (roleExistant.est_systeme) {
+      return reponseErreur(res, "Le nom d'un rôle système ne peut pas être modifié.", 403);
+    }
+
+    const { data, error } = await supabase
+      .from("rf_roles")
+      .update({ nom, description: description || null })
+      .eq("id", roleId)
+      .select("id, nom, description, est_systeme, date_creation")
+      .single();
+
+    if (error) {
+      if (error.code === "23505") return reponseErreur(res, "Un rôle porte déjà ce nom.");
+      console.error(error);
+      return reponseErreur(res, "Impossible de modifier le rôle.", 500);
+    }
+
+    res.json({ succes: true, message: "Rôle modifié.", role: data });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Erreur serveur.", 500);
+  }
+});
+
+// Remplacer les permissions associées à un rôle.
+app.put("/api/roles/:id/permissions", exigerAdministrateur, async (req, res) => {
+  try {
+    const roleId = req.params.id;
+    const permissionIds = req.body.permission_ids;
+
+    if (!uuidValide(roleId)) {
+      return reponseErreur(res, "Identifiant de rôle invalide.");
+    }
+
+    if (!Array.isArray(permissionIds) || permissionIds.some(id => !uuidValide(id))) {
+      return reponseErreur(res, "La liste des permissions est invalide.");
+    }
+
+    const idsUniques = [...new Set(permissionIds)];
+
+    const { data: role, error: erreurRole } = await supabase
+      .from("rf_roles")
+      .select("id")
+      .eq("id", roleId)
+      .maybeSingle();
+
+    if (erreurRole) {
+      console.error(erreurRole);
+      return reponseErreur(res, "Impossible de vérifier le rôle.", 500);
+    }
+    if (!role) return reponseErreur(res, "Rôle introuvable.", 404);
+
+    if (idsUniques.length > 0) {
+      const { data: permissions, error: erreurPermissions } = await supabase
+        .from("rf_permissions")
+        .select("id")
+        .in("id", idsUniques);
+
+      if (erreurPermissions) {
+        console.error(erreurPermissions);
+        return reponseErreur(res, "Impossible de vérifier les permissions.", 500);
+      }
+      if ((permissions || []).length !== idsUniques.length) {
+        return reponseErreur(res, "Une ou plusieurs permissions n'existent pas.");
+      }
+    }
+
+    const { data: actuelles, error: erreurActuelles } = await supabase
+      .from("rf_role_permissions")
+      .select("permission_id")
+      .eq("role_id", roleId);
+
+    if (erreurActuelles) {
+      console.error(erreurActuelles);
+      return reponseErreur(res, "Impossible de lire les permissions actuelles.", 500);
+    }
+
+    const idsActuels = (actuelles || []).map(lien => lien.permission_id);
+    const aRetirer = idsActuels.filter(id => !idsUniques.includes(id));
+    const aAjouter = idsUniques.filter(id => !idsActuels.includes(id));
+
+    // Retirer d'abord les droits devenus inutiles : en cas d'échec ultérieur,
+    // le système reste restrictif plutôt que d'accorder des droits supplémentaires.
+    for (const permissionId of aRetirer) {
+      const { error } = await supabase
+        .from("rf_role_permissions")
         .delete()
-        .eq("id", id);
+        .eq("role_id", roleId)
+        .eq("permission_id", permissionId);
 
-      // Le membre du bureau ne supprime que ses publications.
-      // L'administrateur peut supprimer toutes les publications.
-      if (!estAdministrateur) {
-        const membreId = req.session.membre.membre_id;
-        requete = requete.eq("membre_id", membreId);
+      if (error) {
+        console.error(error);
+        return reponseErreur(res, "Impossible de retirer une permission du rôle.", 500);
       }
+    }
 
-      const { data, error } = await requete
-        .select()
-        .maybeSingle();
+    if (aAjouter.length > 0) {
+      const lignes = aAjouter.map(permission_id => ({
+        role_id: roleId,
+        permission_id
+      }));
+
+      const { error } = await supabase
+        .from("rf_role_permissions")
+        .insert(lignes);
 
       if (error) {
         console.error(error);
         return reponseErreur(
           res,
-          "Impossible de supprimer la publication.",
+          "Certaines permissions n'ont pas pu être ajoutées. Vérifiez la configuration du rôle.",
           500
         );
       }
+    }
 
-      if (!data) {
-        return reponseErreur(
-          res,
-          "Publication introuvable ou vous n'avez pas les droits nécessaires.",
-          404
-        );
+    res.json({
+      succes: true,
+      message: "Permissions du rôle mises à jour.",
+      permission_ids: idsUniques
+    });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Erreur serveur.", 500);
+  }
+});
+
+// Supprimer un rôle personnalisé non attribué à un membre.
+app.delete("/api/roles/:id", exigerAdministrateur, async (req, res) => {
+  try {
+    const roleId = req.params.id;
+
+    if (!uuidValide(roleId)) {
+      return reponseErreur(res, "Identifiant de rôle invalide.");
+    }
+
+    const { data: role, error: erreurRole } = await supabase
+      .from("rf_roles")
+      .select("id, est_systeme")
+      .eq("id", roleId)
+      .maybeSingle();
+
+    if (erreurRole) {
+      console.error(erreurRole);
+      return reponseErreur(res, "Impossible de vérifier le rôle.", 500);
+    }
+    if (!role) return reponseErreur(res, "Rôle introuvable.", 404);
+    if (role.est_systeme) {
+      return reponseErreur(res, "Les rôles système ne peuvent pas être supprimés.", 403);
+    }
+
+    const { data: attributions, error: erreurAttributions } = await supabase
+      .from("rf_membre_roles")
+      .select("membre_id")
+      .eq("role_id", roleId)
+      .limit(1);
+
+    if (erreurAttributions) {
+      console.error(erreurAttributions);
+      return reponseErreur(res, "Impossible de vérifier les membres associés.", 500);
+    }
+    if ((attributions || []).length > 0) {
+      return reponseErreur(
+        res,
+        "Ce rôle est encore attribué à un membre. Réattribuez d'abord ces membres.",
+        409
+      );
+    }
+
+    const { error } = await supabase
+      .from("rf_roles")
+      .delete()
+      .eq("id", roleId);
+
+    if (error) {
+      console.error(error);
+      return reponseErreur(res, "Impossible de supprimer le rôle.", 500);
+    }
+
+    res.json({ succes: true, message: "Rôle supprimé." });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Erreur serveur.", 500);
+  }
+});
+
+// Consulter le rôle et les permissions effectives d'un membre.
+app.get("/api/membres/:id/permissions", exigerAdministrateur, async (req, res) => {
+  try {
+    const membreId = nettoyerTexte(req.params.id);
+    if (!membreId) return reponseErreur(res, "Identifiant de membre invalide.");
+
+    const [
+      { data: membre, error: erreurMembre },
+      { data: attribution, error: erreurAttribution },
+      { data: permissions, error: erreurPermissions },
+      { data: exceptions, error: erreurExceptions }
+    ] = await Promise.all([
+      supabase.from("membres").select("id, prenom, nom").eq("id", membreId).maybeSingle(),
+      supabase.from("rf_membre_roles").select("role_id").eq("membre_id", membreId).maybeSingle(),
+      supabase.from("rf_permissions").select("id, code, nom, description, module").order("module"),
+      supabase.from("rf_membre_permissions").select("permission_id, decision").eq("membre_id", membreId)
+    ]);
+
+    const erreurLecture = erreurMembre || erreurAttribution || erreurPermissions || erreurExceptions;
+    if (erreurLecture) {
+      console.error(erreurLecture);
+      return reponseErreur(res, "Impossible de charger les permissions du membre.", 500);
+    }
+    if (!membre) return reponseErreur(res, "Membre introuvable.", 404);
+
+    let role = null;
+    let idsRole = [];
+
+    if (attribution) {
+      const { data: roleData, error: erreurRole } = await supabase
+        .from("rf_roles")
+        .select("id, nom, description, est_systeme")
+        .eq("id", attribution.role_id)
+        .maybeSingle();
+
+      if (erreurRole) {
+        console.error(erreurRole);
+        return reponseErreur(res, "Impossible de charger le rôle du membre.", 500);
       }
+      role = roleData;
+
+      const { data: liens, error: erreurLiens } = await supabase
+        .from("rf_role_permissions")
+        .select("permission_id")
+        .eq("role_id", attribution.role_id);
+
+      if (erreurLiens) {
+        console.error(erreurLiens);
+        return reponseErreur(res, "Impossible de charger les droits du rôle.", 500);
+      }
+      idsRole = (liens || []).map(lien => lien.permission_id);
+    }
+
+    const decisions = new Map(
+      (exceptions || []).map(exception => [exception.permission_id, exception.decision])
+    );
+
+    const droits = (permissions || []).map(permission => {
+      const decision = decisions.get(permission.id) || null;
+      const autorisationRole = idsRole.includes(permission.id);
+
+      return {
+        ...permission,
+        autorisation_role: autorisationRole,
+        decision_individuelle: decision,
+        autorisee: decision
+          ? decision === "autoriser"
+          : autorisationRole
+      };
+    });
+
+    res.json({ succes: true, membre, role, permissions: droits });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Erreur serveur.", 500);
+  }
+});
+
+// Attribuer un rôle à un membre.
+app.put("/api/membres/:id/role", exigerAdministrateur, async (req, res) => {
+  try {
+    const membreId = nettoyerTexte(req.params.id);
+    const roleId = req.body.role_id;
+
+    if (!membreId || !uuidValide(roleId)) {
+      return reponseErreur(res, "Identifiant de membre ou de rôle invalide.");
+    }
+
+    const [{ data: membre, error: erreurMembre }, { data: role, error: erreurRole }] =
+      await Promise.all([
+        supabase.from("membres").select("id").eq("id", membreId).maybeSingle(),
+        supabase.from("rf_roles").select("id, nom").eq("id", roleId).maybeSingle()
+      ]);
+
+    if (erreurMembre || erreurRole) {
+      console.error(erreurMembre || erreurRole);
+      return reponseErreur(res, "Impossible de vérifier le membre ou le rôle.", 500);
+    }
+    if (!membre) return reponseErreur(res, "Membre introuvable.", 404);
+    if (!role) return reponseErreur(res, "Rôle introuvable.", 404);
+
+    const { data, error } = await supabase
+      .from("rf_membre_roles")
+      .upsert(
+        { membre_id: String(membreId), role_id: roleId },
+        { onConflict: "membre_id" }
+      )
+      .select("membre_id, role_id, date_attribution")
+      .single();
+
+    if (error) {
+      console.error(error);
+      return reponseErreur(res, "Impossible d'attribuer le rôle.", 500);
+    }
+
+    res.json({ succes: true, message: "Rôle attribué.", attribution: data, role });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Erreur serveur.", 500);
+  }
+});
+
+// Ajouter ou modifier une exception individuelle : autoriser ou refuser.
+app.put("/api/membres/:id/permissions", exigerAdministrateur, async (req, res) => {
+  try {
+    const membreId = nettoyerTexte(req.params.id);
+    const permissionId = req.body.permission_id;
+    const decision = req.body.decision;
+
+    if (!membreId || !uuidValide(permissionId)) {
+      return reponseErreur(res, "Identifiant de membre ou de permission invalide.");
+    }
+    if (!["autoriser", "refuser"].includes(decision)) {
+      return reponseErreur(res, "La décision doit être 'autoriser' ou 'refuser'.");
+    }
+
+    const [{ data: membre, error: erreurMembre }, { data: permission, error: erreurPermission }] =
+      await Promise.all([
+        supabase.from("membres").select("id").eq("id", membreId).maybeSingle(),
+        supabase.from("rf_permissions").select("id").eq("id", permissionId).maybeSingle()
+      ]);
+
+    if (erreurMembre || erreurPermission) {
+      console.error(erreurMembre || erreurPermission);
+      return reponseErreur(res, "Impossible de vérifier le membre ou la permission.", 500);
+    }
+    if (!membre) return reponseErreur(res, "Membre introuvable.", 404);
+    if (!permission) return reponseErreur(res, "Permission introuvable.", 404);
+
+    const { data, error } = await supabase
+      .from("rf_membre_permissions")
+      .upsert(
+        {
+          membre_id: String(membreId),
+          permission_id: permissionId,
+          decision,
+          attribue_par: String(req.session.administrateur.id)
+        },
+        { onConflict: "membre_id,permission_id" }
+      )
+      .select("membre_id, permission_id, decision, attribue_par, date_attribution")
+      .single();
+
+    if (error) {
+      console.error(error);
+      return reponseErreur(res, "Impossible d'enregistrer cette décision.", 500);
+    }
+
+    res.json({ succes: true, message: "Permission individuelle mise à jour.", exception: data });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Erreur serveur.", 500);
+  }
+});
+
+// Supprimer une exception individuelle : le membre retrouve le droit de son rôle.
+app.delete(
+  "/api/membres/:id/permissions/:permissionId",
+  exigerAdministrateur,
+  async (req, res) => {
+    try {
+      const membreId = nettoyerTexte(req.params.id);
+      const permissionId = req.params.permissionId;
+
+      if (!membreId || !uuidValide(permissionId)) {
+        return reponseErreur(res, "Identifiant de membre ou de permission invalide.");
+      }
+
+      const { data, error } = await supabase
+        .from("rf_membre_permissions")
+        .delete()
+        .eq("membre_id", String(membreId))
+        .eq("permission_id", permissionId)
+        .select("membre_id, permission_id")
+        .maybeSingle();
+
+      if (error) {
+        console.error(error);
+        return reponseErreur(res, "Impossible de réinitialiser cette permission.", 500);
+      }
+      if (!data) return reponseErreur(res, "Aucune exception individuelle à supprimer.", 404);
 
       res.json({
         succes: true,
-        message: "Publication supprimée."
+        message: "La permission individuelle suit de nouveau les règles du rôle."
       });
     } catch (erreur) {
       console.error(erreur);
@@ -1769,6 +2211,95 @@ app.delete(
   }
 );
 
+
+// ======================================================
+// 22 bis. ADMINISTRATEURS MULTIPLES (promotion de membres)
+// ======================================================
+
+app.get("/api/administrateurs", exigerAdministrateur, async (req, res) => {
+  try {
+    const [{ data: comptes, error: e1 }, { data: promus, error: e2 }] =
+      await Promise.all([
+        supabase.from("administrateurs").select("id, identifiant"),
+        supabase.from("rf_membres_administrateurs").select("membre_id")
+      ]);
+    if (e1 || e2) {
+      console.error(e1 || e2);
+      return reponseErreur(res, "Impossible de charger les administrateurs.", 500);
+    }
+
+    const ids = (promus || []).map(p => p.membre_id);
+    let membres = [];
+    if (ids.length) {
+      const { data, error } = await supabase
+        .from("membres").select("id, prenom, nom").in("id", ids);
+      if (error) throw error;
+      membres = data || [];
+    }
+
+    const administrateurs = [
+      ...(comptes || []).map(c => ({ type: "compte", nom: c.identifiant })),
+      ...membres.map(m => ({
+        type: "membre", membre_id: m.id, nom: `${m.prenom} ${m.nom}`
+      }))
+    ];
+    res.json({ succes: true, administrateurs });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Erreur serveur.", 500);
+  }
+});
+
+app.put("/api/membres/:id/administrateur", exigerAdministrateur, async (req, res) => {
+  try {
+    const membreId = nettoyerTexte(req.params.id);
+    const { data: membre, error: e1 } = await supabase
+      .from("membres").select("id").eq("id", membreId).maybeSingle();
+    if (e1) throw e1;
+    if (!membre) return reponseErreur(res, "Membre introuvable.", 404);
+
+    const { error } = await supabase
+      .from("rf_membres_administrateurs")
+      .upsert(
+        { membre_id: String(membreId), promu_par: String(req.session.administrateur.id) },
+        { onConflict: "membre_id" }
+      );
+    if (error) {
+      console.error(error);
+      return reponseErreur(res, "Impossible de promouvoir ce membre.", 500);
+    }
+    res.json({ succes: true, message: "Membre promu administrateur." });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Erreur serveur.", 500);
+  }
+});
+
+app.delete("/api/membres/:id/administrateur", exigerAdministrateur, async (req, res) => {
+  try {
+    const membreId = nettoyerTexte(req.params.id);
+
+    // Garde-fou : ne jamais se retrouver sans aucun administrateur.
+    const [{ count: nbComptes }, { count: nbPromus }] = await Promise.all([
+      supabase.from("administrateurs").select("*", { count: "exact", head: true }),
+      supabase.from("rf_membres_administrateurs").select("*", { count: "exact", head: true })
+    ]);
+    if ((nbComptes || 0) + (nbPromus || 0) <= 1) {
+      return reponseErreur(res, "Impossible de retirer le dernier administrateur.");
+    }
+
+    const { error } = await supabase
+      .from("rf_membres_administrateurs").delete().eq("membre_id", String(membreId));
+    if (error) {
+      console.error(error);
+      return reponseErreur(res, "Impossible de retirer cet administrateur.", 500);
+    }
+    res.json({ succes: true, message: "Droits d'administrateur retirés." });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Erreur serveur.", 500);
+  }
+});
 
 app.use((req, res) => {
   if (req.path.startsWith("/api/")) {
