@@ -182,10 +182,10 @@ function ouvrirCarteMembre(membre) {
     carte.innerHTML = `
         <div style="background:#fff; border-radius:16px; width:100%; max-width:440px;
                     max-height:88vh; overflow-y:auto; box-shadow:0 20px 50px rgba(0,0,0,.35);">
-            <div style="background:#14532d; color:#fff; padding:26px 24px; text-align:center;
+            <div style="background:#1e40af; color:#fff; padding:26px 24px; text-align:center;
                         border-radius:16px 16px 0 0;">
                 <div style="width:72px; height:72px; margin:0 auto 12px; border-radius:50%;
-                            background:#fff; color:#14532d; font-size:26px; font-weight:bold;
+                            background:#fff; color:#1e40af; font-size:26px; font-weight:bold;
                             display:flex; align-items:center; justify-content:center;">
                     ${echapper(initiales)}
                 </div>
@@ -196,7 +196,7 @@ function ouvrirCarteMembre(membre) {
             <div style="padding:16px 24px 22px; text-align:right;">
                 <button id="fermer-carte" type="button"
                     style="padding:10px 22px; cursor:pointer; border:none; border-radius:8px;
-                           background:#14532d; color:#fff; font-weight:bold;">
+                           background:#1e40af; color:#fff; font-weight:bold;">
                     Fermer
                 </button>
             </div>
@@ -1269,3 +1269,26 @@ if (boutonInscrire && blocInscription) {
         });
     });
 }
+
+// =====================================
+// MENU MOBILE (BOUTON ☰)
+// =====================================
+(function () {
+    const bouton = document.getElementById("bouton-menu");
+    const fond = document.getElementById("menu-fond");
+    if (!bouton || !fond) return;
+
+    const definir = ouvert => {
+        document.body.classList.toggle("menu-ouvert", ouvert);
+        bouton.setAttribute("aria-expanded", String(ouvert));
+        bouton.textContent = ouvert ? "✕" : "☰";
+    };
+
+    bouton.addEventListener("click", () =>
+        definir(!document.body.classList.contains("menu-ouvert")));
+    fond.addEventListener("click", () => definir(false));
+    document.addEventListener("keydown", e => { if (e.key === "Escape") definir(false); });
+    document.querySelectorAll(".sidebar-nav .nav-link").forEach(l =>
+        l.addEventListener("click", () => definir(false)));
+    window.addEventListener("resize", () => { if (window.innerWidth > 900) definir(false); });
+})();
