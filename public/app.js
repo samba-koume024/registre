@@ -115,64 +115,122 @@ function actualiserStatistiques() {
 
 // Afficher les membres dans le tableau
 function ouvrirCarteMembre(membre) {
-    let carte = document.getElementById("carte-membre");
+    const echapper = texte => String(texte ?? "").replace(/[&<>"']/g, c =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-    if (!carte) {
-        carte = document.createElement("div");
-        carte.id = "carte-membre";
+    const dateFr = valeur => {
+        if (!valeur) return "";
+        const morceaux = String(valeur).slice(0, 10).split("-");
+        return morceaux.length === 3 ? morceaux.reverse().join("/") : valeur;
+    };
 
-        carte.style.cssText = `
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.6);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-            padding: 20px;
-        `;
+    const calculerAge = valeur => {
+        const naissance = new Date(valeur);
+        if (!valeur || isNaN(naissance)) return "";
+        const aujourdhui = new Date();
+        let age = aujourdhui.getFullYear() - naissance.getFullYear();
+        const anniversaire = new Date(
+            aujourdhui.getFullYear(), naissance.getMonth(), naissance.getDate()
+        );
+        if (aujourdhui < anniversaire) age--;
+        return `${age} ans`;
+    };
 
-        document.body.appendChild(carte);
-    }
+    const connus = ["id", "prenom", "nom", "sexe", "date_naissance", "telephone",
+        "email", "profession", "fonction", "date_inscription"];
 
     const informations = [
-        ["Prénom", membre.prenom],
-        ["Nom", membre.nom],
         ["Sexe", membre.sexe],
-        ["Date de naissance", membre.date_naissance],
+        ["Date de naissance", dateFr(membre.date_naissance)],
+        ["Âge", calculerAge(membre.date_naissance)],
         ["Téléphone", membre.telephone],
         ["E-mail", membre.email],
         ["Profession", membre.profession],
-        ["Fonction", membre.fonction],
-        ["Catégorie", membre.categorie],
+        ["Inscrit le", dateFr(membre.date_inscription)]
     ];
 
-    const contenu = informations.map(([titre, valeur]) => `
-        <p><strong>${titre} :</strong> ${valeur || "Non renseigné"}</p>
-    `).join("");
+    // Autres informations éventuelles enregistrées pour ce membre
+    Object.keys(membre).forEach(cle => {
+        if (connus.includes(cle) || /mot_de_passe|hash|token/i.test(cle)) return;
+        if (membre[cle] === null || membre[cle] === "" || typeof membre[cle] === "object") return;
+        const titre = cle.replace(/_/g, " ");
+        informations.push([titre.charAt(0).toUpperCase() + titre.slice(1), String(membre[cle])]);
+    });
+
+    const initiales = `${(membre.prenom || "?")[0]}${(membre.nom || "")[0] || ""}`.toUpperCase();
+
+    const lignes = informations.map(([titre, valeur]) => `
+        <div style="display:flex; justify-content:space-between; gap:16px;
+                    padding:9px 0; border-bottom:1px solid #e5ebe7;">
+            <span style="color:#6b7c72;">${echapper(titre)}</span>
+            <strong style="text-align:right; word-break:break-word;">
+                ${valeur ? echapper(valeur) : '<span style="color:#9aa8a0; font-weight:normal;">Non renseigné</span>'}
+            </strong>
+        </div>`).join("");
+
+    const ancienne = document.getElementById("carte-membre");
+    if (ancienne) ancienne.remove();
+
+    const carte = document.createElement("div");
+    carte.id = "carte-membre";
+    carte.style.cssText = `
+        position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+        display: flex; align-items: center; justify-content: center;
+        z-index: 9999; padding: 20px;
+    `;
 
     carte.innerHTML = `
-        <div style="background:white; padding:25px; border-radius:12px;
-                    width:100%; max-width:450px; max-height:85vh;
-                    overflow-y:auto;">
-            <h2>Fiche du membre</h2>
-            ${contenu}
-            <button id="fermer-carte" type="button"
-                style="padding:10px 20px; margin-top:15px; cursor:pointer;">
-                Fermer
-            </button>
+        <div style="background:#fff; border-radius:16px; width:100%; max-width:440px;
+                    max-height:88vh; overflow-y:auto; box-shadow:0 20px 50px rgba(0,0,0,.35);">
+            <div style="background:#14532d; color:#fff; padding:26px 24px; text-align:center;
+                        border-radius:16px 16px 0 0;">
+                <div style="width:72px; height:72px; margin:0 auto 12px; border-radius:50%;
+                            background:#fff; color:#14532d; font-size:26px; font-weight:bold;
+                            display:flex; align-items:center; justify-content:center;">
+                    ${echapper(initiales)}
+                </div>
+                <h2 style="margin:0; font-size:22px;">${echapper(membre.prenom)} ${echapper(membre.nom)}</h2>
+                <p id="carte-bureau" style="margin:6px 0 0; opacity:.9;"></p>
+            </div>
+            <div style="padding:8px 24px 4px;">${lignes}</div>
+            <div style="padding:16px 24px 22px; text-align:right;">
+                <button id="fermer-carte" type="button"
+                    style="padding:10px 22px; cursor:pointer; border:none; border-radius:8px;
+                           background:#14532d; color:#fff; font-weight:bold;">
+                    Fermer
+                </button>
+            </div>
         </div>
     `;
 
-    document.getElementById("fermer-carte").onclick = () => {
+    document.body.appendChild(carte);
+
+    const fermer = () => {
         carte.remove();
+        document.removeEventListener("keydown", surTouche);
+    };
+    const surTouche = evenement => {
+        if (evenement.key === "Escape") fermer();
+    };
+    document.addEventListener("keydown", surTouche);
+    document.getElementById("fermer-carte").onclick = fermer;
+    carte.onclick = evenement => {
+        if (evenement.target === carte) fermer();
     };
 
-    carte.onclick = evenement => {
-        if (evenement.target === carte) {
-            carte.remove();
-        }
-    };
+    // Fonction au bureau (si le membre en occupe une)
+    fetch("/api/bureau")
+        .then(reponse => reponse.json())
+        .then(donnees => {
+            const attribution = (donnees.bureau || []).find(
+                b => String(b.membre_id) === String(membre.id)
+            );
+            const zone = document.getElementById("carte-bureau");
+            if (attribution && zone) {
+                zone.textContent = `Bureau : ${attribution.fonction}`;
+            }
+        })
+        .catch(() => {});
 }
 
 function afficherMembres(membres) {
@@ -274,6 +332,14 @@ boutonSupprimer.addEventListener("click", () => {
 });
 
 celluleActions.append(boutonModifier, boutonSupprimer);
+
+// Toute la ligne ouvre la fiche du membre
+ligne.style.cursor = "pointer";
+ligne.title = "Cliquer pour voir la fiche";
+ligne.addEventListener("click", evenement => {
+    if (evenement.target.closest("button")) return;
+    ouvrirCarteMembre(membre);
+});
 
 ligne.append(
     cellulePrenom,
