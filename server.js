@@ -2440,6 +2440,135 @@ app.get("/api/supervisions", exigerAdministrateur, async (req, res) => {
   }
 });
 
+// ======================================================
+// 22 quinquies. RÉUNIONS : CONVOCATIONS, PARTICIPANTS, PROCÈS-VERBAUX
+// ======================================================
+
+const STATUTS_REUNION = ["Prévue", "Tenue", "Annulée"];
+const PRESENCES_REUNION = ["Convoqué", "Présent", "Excusé", "Absent"];
+
+function lireReunion(corps) {
+  const titre = nettoyerTexte(corps.titre).slice(0, 150);
+  const date = nettoyerTexte(corps.date_reunion);
+  const statut = STATUTS_REUNION.includes(corps.statut) ? corps.statut : "Prévue";
+  if (!titre || !dateValide(date)) return null;
+  return {
+    titre,
+    date_reunion: date,
+    heure: nettoyerTexte(corps.heure).slice(0, 5) || null,
+    lieu: nettoyerTexte(corps.lieu).slice(0, 150) || null,
+    ordre_du_jour: nettoyerTexte(corps.ordre_du_jour).slice(0, 5000) || null,
+    proces_verbal: nettoyerTexte(corps.proces_verbal).slice(0, 20000) || null,
+    statut
+  };
+}
+
+function lireParticipants(liste) {
+  if (!Array.isArray(liste) || liste.length > 2000) return null;
+  const vus = new Map();
+  for (const p of liste) {
+    const presence = PRESENCES_REUNION.includes(p.presence) ? p.presence : "Convoqué";
+    vus.set(String(p.membre_id), presence);
+  }
+  return [...vus].map(([membre_id, presence]) => ({ membre_id, presence }));
+}
+
+async function remplacerParticipants(reunionId, participants) {
+  const { error: e1 } = await supabase
+    .from("rf_reunion_participants").delete().eq("reunion_id", reunionId);
+  if (e1) throw e1;
+  if (!participants.length) return;
+  const { error: e2 } = await supabase
+    .from("rf_reunion_participants")
+    .insert(participants.map(p => ({ reunion_id: reunionId, ...p })));
+  if (e2) throw e2;
+}
+
+app.get("/api/reunions", exigerAdministrateur, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("rf_reunions")
+      .select("id, titre, date_reunion, heure, lieu, statut")
+      .order("date_reunion", { ascending: false });
+    if (error) throw error;
+    res.json({ succes: true, reunions: data || [] });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de charger les réunions.", 500);
+  }
+});
+
+app.get("/api/reunions/:id", exigerAdministrateur, async (req, res) => {
+  try {
+    if (!uuidValide(req.params.id)) return reponseErreur(res, "Identifiant invalide.");
+    const [{ data: reunion, error: e1 }, { data: participants, error: e2 }] =
+      await Promise.all([
+        supabase.from("rf_reunions").select("*").eq("id", req.params.id).maybeSingle(),
+        supabase.from("rf_reunion_participants")
+          .select("membre_id, presence").eq("reunion_id", req.params.id)
+      ]);
+    if (e1 || e2) throw e1 || e2;
+    if (!reunion) return reponseErreur(res, "Réunion introuvable.", 404);
+    res.json({ succes: true, reunion, participants: participants || [] });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de charger la réunion.", 500);
+  }
+});
+
+app.post("/api/reunions", exigerAdministrateur, async (req, res) => {
+  try {
+    const reunion = lireReunion(req.body);
+    const participants = lireParticipants(req.body.participants);
+    if (!reunion || !participants) return reponseErreur(res, "Titre, date ou participants invalides.");
+
+    const { data, error } = await supabase
+      .from("rf_reunions")
+      .insert({ ...reunion, cree_par: String(req.session.administrateur.id) })
+      .select("id").single();
+    if (error) throw error;
+
+    await remplacerParticipants(data.id, participants);
+    res.status(201).json({ succes: true, message: "Réunion enregistrée.", id: data.id });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible d'enregistrer la réunion.", 500);
+  }
+});
+
+app.put("/api/reunions/:id", exigerAdministrateur, async (req, res) => {
+  try {
+    if (!uuidValide(req.params.id)) return reponseErreur(res, "Identifiant invalide.");
+    const reunion = lireReunion(req.body);
+    const participants = lireParticipants(req.body.participants);
+    if (!reunion || !participants) return reponseErreur(res, "Titre, date ou participants invalides.");
+
+    const { data, error } = await supabase
+      .from("rf_reunions").update(reunion).eq("id", req.params.id)
+      .select("id").maybeSingle();
+    if (error) throw error;
+    if (!data) return reponseErreur(res, "Réunion introuvable.", 404);
+
+    await remplacerParticipants(req.params.id, participants);
+    res.json({ succes: true, message: "Réunion mise à jour." });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de modifier la réunion.", 500);
+  }
+});
+
+app.delete("/api/reunions/:id", exigerAdministrateur, async (req, res) => {
+  try {
+    if (!uuidValide(req.params.id)) return reponseErreur(res, "Identifiant invalide.");
+    const { error } = await supabase.from("rf_reunions").delete().eq("id", req.params.id);
+    if (error) throw error;
+    res.json({ succes: true, message: "Réunion supprimée." });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de supprimer la réunion.", 500);
+  }
+});
+
 app.use((req, res) => {
   if (req.path.startsWith("/api/")) {
     return reponseErreur(res, "Route API introuvable.", 404);

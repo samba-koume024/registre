@@ -721,6 +721,10 @@ liensNavigation.forEach(lien => {
             chargerListeBureau();
         }
 
+        if (identifiant === "reunions" && window.chargerReunions) {
+            window.chargerReunions();
+        }
+
         if (identifiant === "rapports" && window.chargerRapports) {
             window.chargerRapports();
         }
