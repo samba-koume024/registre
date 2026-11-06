@@ -44,6 +44,8 @@
         Programmes hebdomadaires
     </a>
 
+                <div id="sous-menu-programme" class="sous-menu"></div>
+
     <a href="#pointages" class="nav-link">
         <span class="nav-icon">✓</span>
         Pointages
@@ -266,6 +268,8 @@
                     </table>
                 </div>
 
+                <div id="programme-categories"></div>
+
             </section>
 
             <!-- LISTE DES MEMBRES -->
@@ -444,14 +448,12 @@
                                 <tr>
                                     <th>Prénom</th>
                                     <th>Nom</th>
-                                    <th>Téléphone</th>
-                                    <th>Actions</th>
                                 </tr>
                             </thead>
 
                             <tbody id="liste-membres">
                                 <tr>
-                                    <td colspan="4">
+                                    <td colspan="2">
                                         Chargement des membres...
                                     </td>
                                 </tr>
@@ -665,10 +667,13 @@
     <!-- SCRIPT PRINCIPAL -->
     <script src="app.js"></script>
     <script src="acces.js"></script>
+    <script src="categories.js"></script>
+    <script src="programme-categories.js"></script>
     <script src="pointages.js"></script>
     <script src="supervisions.js"></script>
     <script src="rapports.js"></script>
     <script src="reunions.js"></script>
+    <script src="membres-liste.js"></script>
 
 </body>
 </html>

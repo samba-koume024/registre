@@ -5,7 +5,7 @@
     const STATUTS = ["Présent", "Retard", "Excusé", "Absent"];
     const zone = () => document.getElementById("pointages-contenu");
     const JOURS = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
-    let membres = [], programme = [], activitesAffichees = [];
+    let membres = [], programme = [], activitesAffichees = [], categoriesProgramme = {}, bureauIds = [], programmeCourant = null;
 
     const esc = t => String(t ?? "").replace(/[&<>"']/g, c =>
         ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -58,6 +58,7 @@
     function demarrer(i) {
         const a = activitesAffichees[i];
         if (!a) return;
+        programmeCourant = a;
         document.getElementById("pt-date").value = dateDuJour(a.jour);
         document.getElementById("pt-activite").value = a.activite;
         chargerAppel();
@@ -78,6 +79,7 @@
                 <div id="pt-liste"></div>
             </div>`;
         document.getElementById("pt-charger").onclick = chargerAppel;
+        document.getElementById("pt-activite").addEventListener("input", () => { programmeCourant = null; });
         zone().querySelectorAll(".pt-activite").forEach(b =>
             b.onclick = () => demarrer(Number(b.dataset.i)));
     }
@@ -92,7 +94,11 @@
             const d = await api(`/api/pointages?date=${encodeURIComponent(date)}&activite=${encodeURIComponent(activite)}`);
             const deja = new Map(d.pointages.map(p => [String(p.membre_id), p]));
 
-            const lignes = membres.map(m => {
+            const codes = programmeCourant ? (categoriesProgramme[String(programmeCourant.id)] || []) : [];
+            const concernes = window.membresConcernes(membres, codes, bureauIds);
+            const libelles = window.CATEGORIES_FOGNY.filter(c => codes.includes(c.code)).map(c => c.libelle);
+
+            const lignes = concernes.map(m => {
                 const p = deja.get(String(m.id));
                 return `<tr data-membre="${esc(m.id)}">
                     <td>${esc(m.prenom)} ${esc(m.nom)}</td>
@@ -104,11 +110,13 @@
             }).join("");
 
             cible.innerHTML = `
+                <p>${programmeCourant ? `<strong>${esc(programmeCourant.activite)}</strong> · ` : ""}${
+                    libelles.length ? "Catégories concernées : " + esc(libelles.join(", ")) + " · " : ""}<strong>${concernes.length}</strong> membre(s) à pointer.</p>
                 <p><strong>${d.pointages.length}</strong> pointage(s) déjà enregistré(s) pour cette date.
                 <button type="button" id="pt-tous-presents">Tous présents</button></p>
                 <div class="table-container"><table>
                     <thead><tr><th>Membre</th><th>Statut</th><th>Observation</th></tr></thead>
-                    <tbody>${lignes || '<tr><td colspan="3">Aucun membre.</td></tr>'}</tbody>
+                    <tbody>${lignes || '<tr><td colspan="3">Aucun membre dans les catégories concernées.</td></tr>'}</tbody>
                 </table></div>
                 <p id="pt-resume"></p>
                 <button type="button" class="primary-button" id="pt-enregistrer">Enregistrer l'appel</button>`;
@@ -146,6 +154,17 @@
         if (!zone()) return;
         try {
             membres = await api("/api/membres");
+            try {
+                const b = await api("/api/bureau");
+                bureauIds = (b.bureau || []).map(x => String(x.membre_id));
+            } catch (e) { bureauIds = []; }
+            try {
+                const l = await api("/api/programme-categories");
+                categoriesProgramme = {};
+                (l.liens || []).forEach(x => {
+                    (categoriesProgramme[String(x.programme_id)] = categoriesProgramme[String(x.programme_id)] || []).push(x.categorie);
+                });
+            } catch (e) { categoriesProgramme = {}; }
             try {
                 const prog = await api("/api/programme");
                 programme = Array.isArray(prog) ? prog : [];

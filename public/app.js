@@ -799,6 +799,10 @@ liensNavigation.forEach(lien => {
             window.chargerSupervisions();
         }
 
+        if (identifiant === "programme" && window.chargerProgrammeCategories) {
+            window.chargerProgrammeCategories();
+        }
+
         if (identifiant === "pointages" && window.chargerPointages) {
             window.chargerPointages();
         }

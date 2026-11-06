@@ -2569,6 +2569,51 @@ app.delete("/api/reunions/:id", exigerAdministrateur, async (req, res) => {
   }
 });
 
+// ======================================================
+// 22 sexies. PROGRAMME : CATÉGORIES CONCERNÉES PAR ACTIVITÉ
+// ======================================================
+
+const CATEGORIES_PROGRAMME = ["hommes", "femmes", "enfants", "jeunes", "adultes", "bureau"];
+
+app.get("/api/programme-categories", exigerAdministrateur, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("rf_programme_categories").select("programme_id, categorie");
+    if (error) throw error;
+    res.json({ succes: true, liens: data || [] });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de charger les catégories du programme.", 500);
+  }
+});
+
+app.put("/api/programme/:id/categories", exigerAdministrateur, async (req, res) => {
+  try {
+    const programmeId = nettoyerTexte(req.params.id);
+    const categories = req.body.categories;
+    if (!programmeId || programmeId.length > 60) return reponseErreur(res, "Activité invalide.");
+    if (!Array.isArray(categories) || categories.some(c => !CATEGORIES_PROGRAMME.includes(c))) {
+      return reponseErreur(res, "Catégories invalides.");
+    }
+
+    const { error: e1 } = await supabase
+      .from("rf_programme_categories").delete().eq("programme_id", programmeId);
+    if (e1) throw e1;
+
+    const uniques = [...new Set(categories)];
+    if (uniques.length) {
+      const { error: e2 } = await supabase
+        .from("rf_programme_categories")
+        .insert(uniques.map(categorie => ({ programme_id: programmeId, categorie })));
+      if (e2) throw e2;
+    }
+    res.json({ succes: true, message: "Catégories enregistrées." });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible d'enregistrer les catégories.", 500);
+  }
+});
+
 app.use((req, res) => {
   if (req.path.startsWith("/api/")) {
     return reponseErreur(res, "Route API introuvable.", 404);
