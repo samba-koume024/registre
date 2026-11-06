@@ -2301,6 +2301,72 @@ app.delete("/api/membres/:id/administrateur", exigerAdministrateur, async (req, 
   }
 });
 
+// ======================================================
+// 22 ter. POINTAGES : PRÉSENCES ET ABSENCES
+// ======================================================
+
+const STATUTS_POINTAGE = ["Présent", "Retard", "Excusé", "Absent"];
+const dateValide = v => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+
+app.get("/api/pointages", exigerAdministrateur, async (req, res) => {
+  try {
+    const date = nettoyerTexte(req.query.date);
+    const activite = nettoyerTexte(req.query.activite);
+    if (!dateValide(date)) return reponseErreur(res, "Date invalide.");
+
+    const { data, error } = await supabase
+      .from("rf_pointages")
+      .select("membre_id, statut, observation")
+      .eq("date_pointage", date)
+      .eq("activite", activite);
+    if (error) {
+      console.error(error);
+      return reponseErreur(res, "Impossible de charger les pointages.", 500);
+    }
+    res.json({ succes: true, pointages: data || [] });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Erreur serveur.", 500);
+  }
+});
+
+app.put("/api/pointages", exigerAdministrateur, async (req, res) => {
+  try {
+    const date = nettoyerTexte(req.body.date);
+    const activite = nettoyerTexte(req.body.activite).slice(0, 120);
+    const lignes = req.body.pointages;
+
+    if (!dateValide(date)) return reponseErreur(res, "Date invalide.");
+    if (!Array.isArray(lignes) || !lignes.length || lignes.length > 2000) {
+      return reponseErreur(res, "Liste de pointages invalide.");
+    }
+    if (lignes.some(l => !STATUTS_POINTAGE.includes(l.statut))) {
+      return reponseErreur(res, "Statut de présence invalide.");
+    }
+
+    const enregistrements = lignes.map(l => ({
+      membre_id: String(l.membre_id),
+      date_pointage: date,
+      activite,
+      statut: l.statut,
+      observation: nettoyerTexte(l.observation).slice(0, 300) || null,
+      enregistre_par: String(req.session.administrateur.id)
+    }));
+
+    const { error } = await supabase
+      .from("rf_pointages")
+      .upsert(enregistrements, { onConflict: "membre_id,date_pointage,activite" });
+    if (error) {
+      console.error(error);
+      return reponseErreur(res, "Impossible d'enregistrer l'appel.", 500);
+    }
+    res.json({ succes: true, message: "Appel enregistré." });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Erreur serveur.", 500);
+  }
+});
+
 app.use((req, res) => {
   if (req.path.startsWith("/api/")) {
     return reponseErreur(res, "Route API introuvable.", 404);

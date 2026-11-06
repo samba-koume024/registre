@@ -721,6 +721,10 @@ liensNavigation.forEach(lien => {
             chargerListeBureau();
         }
 
+        if (identifiant === "pointages" && window.chargerPointages) {
+            window.chargerPointages();
+        }
+
         if (identifiant === "acces" && window.chargerAcces) {
             window.chargerAcces();
         }
