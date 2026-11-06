@@ -2367,6 +2367,79 @@ app.put("/api/pointages", exigerAdministrateur, async (req, res) => {
   }
 });
 
+// ======================================================
+// 22 quater. SUPERVISIONS : ANALYSE DES PARTICIPATIONS
+// ======================================================
+
+app.get("/api/supervisions", exigerAdministrateur, async (req, res) => {
+  try {
+    const debut = nettoyerTexte(req.query.debut);
+    const fin = nettoyerTexte(req.query.fin);
+    if (!dateValide(debut) || !dateValide(fin) || debut > fin) {
+      return reponseErreur(res, "Période invalide.");
+    }
+
+    // Lecture par pages de 1000 (limite de Supabase)
+    const pointages = [];
+    for (let depart = 0; ; depart += 1000) {
+      const { data, error } = await supabase
+        .from("rf_pointages")
+        .select("membre_id, statut, date_pointage, activite")
+        .gte("date_pointage", debut)
+        .lte("date_pointage", fin)
+        .range(depart, depart + 999);
+      if (error) throw error;
+      pointages.push(...(data || []));
+      if (!data || data.length < 1000) break;
+    }
+
+    const { data: membres, error: erreurMembres } = await supabase
+      .from("membres").select("id, prenom, nom");
+    if (erreurMembres) throw erreurMembres;
+
+    const noms = new Map((membres || []).map(m => [String(m.id), `${m.prenom} ${m.nom}`]));
+    const parMembre = new Map();
+    const seances = new Set();
+
+    for (const p of pointages) {
+      seances.add(`${p.date_pointage}|${p.activite}`);
+      const cle = String(p.membre_id);
+      if (!parMembre.has(cle)) {
+        parMembre.set(cle, {
+          membre_id: cle, nom: noms.get(cle) || "Membre supprimé",
+          present: 0, retard: 0, excuse: 0, absent: 0
+        });
+      }
+      const ligne = parMembre.get(cle);
+      if (p.statut === "Présent") ligne.present++;
+      else if (p.statut === "Retard") ligne.retard++;
+      else if (p.statut === "Excusé") ligne.excuse++;
+      else if (p.statut === "Absent") ligne.absent++;
+    }
+
+    const taux = l => {
+      const base = l.present + l.retard + l.absent;
+      return base ? Math.round(((l.present + l.retard) / base) * 100) : null;
+    };
+
+    const liste = [...parMembre.values()].map(l => ({ ...l, taux: taux(l) }))
+      .sort((a, b) => (a.taux ?? 101) - (b.taux ?? 101) || b.absent - a.absent);
+
+    const totaux = liste.reduce((t, l) => {
+      t.present += l.present; t.retard += l.retard;
+      t.excuse += l.excuse; t.absent += l.absent;
+      return t;
+    }, { present: 0, retard: 0, excuse: 0, absent: 0 });
+    totaux.seances = seances.size;
+    totaux.taux = taux(totaux);
+
+    res.json({ succes: true, totaux, membres: liste });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de charger la supervision.", 500);
+  }
+});
+
 app.use((req, res) => {
   if (req.path.startsWith("/api/")) {
     return reponseErreur(res, "Route API introuvable.", 404);
