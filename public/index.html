@@ -30,14 +30,9 @@
         Tableau de bord
     </a>
 
-    <a href="#inscription" class="nav-link">
-        <span class="nav-icon">＋</span>
-        Inscrire un membre
-    </a>
-
     <a href="#membres" class="nav-link">
         <span class="nav-icon">♙</span>
-        Liste des membres
+        Membres
     </a>
 
     <a href="#programme" class="nav-link">
@@ -186,7 +181,107 @@
 </div>
 
             <!-- FORMULAIRE D'INSCRIPTION -->
-            <section class="form-section page-section" id="inscription" style="display: none;">
+            
+
+            <!-- PROGRAMME HEBDOMADAIRE -->
+            <section class="page-section" id="programme" style="display: none;">
+
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">ACTIVITÉS DU MOUVEMENT</p>
+                        <h2>Programme hebdomadaire</h2>
+                        <p class="section-description">
+                            Consultez les activités prévues chaque semaine.
+                        </p>
+                    </div>
+
+                    <button
+                        type="button"
+                        id="ajouter-activite"
+                        class="primary-button"
+                    >
+                        + Ajouter une activité
+                    </button>
+                </div>
+
+                <div id="formulaire-activite" style="display: none; margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+                    <h3>Ajouter une activité</h3>
+
+                    <form id="form-ajout-activite">
+                        <label for="jour-activite">Jour :</label>
+                        <select id="jour-activite" name="jour" required>
+                            <option value="">Choisir un jour</option>
+                            <option value="Lundi">Lundi</option>
+                            <option value="Mercredi">Mercredi</option>
+                            <option value="Jeudi">Jeudi</option>
+                            <option value="Vendredi">Vendredi</option>
+                            <option value="Samedi">Samedi</option>
+                            <option value="Dimanche">Dimanche</option>
+                        </select>
+
+                        <label for="heure-debut-activite">Heure de début :</label>
+                        <input type="time" id="heure-debut-activite" name="heure_debut" required>
+
+                        <label for="heure-fin-activite">Heure de fin :</label>
+                        <input type="time" id="heure-fin-activite" name="heure_fin" required>
+
+                        <label for="nom-activite">Activité :</label>
+                        <input type="text" id="nom-activite" name="activite" required>
+
+                        <label for="lieu-activite">Lieu :</label>
+                        <input type="text" id="lieu-activite" name="lieu">
+
+                        <label for="observations-activite">Observations :</label>
+                        <textarea id="observations-activite" name="observations"></textarea>
+
+                        <button type="submit">Enregistrer l'activité</button>
+                        <button type="button" id="annuler-activite">Annuler</button>
+                    </form>
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Jour</th>
+                                <th>Heure</th>
+                                <th>Activité</th>
+                                <th>Lieu</th>
+                                <th>Observations</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="liste-programme">
+                            <tr>
+                                <td colspan="6">
+                                    Chargement du programme...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+            </section>
+
+            <!-- LISTE DES MEMBRES -->
+            <section class="liste-membres page-section" id="membres" style="display: none;">
+
+                <div class="section-heading">
+                    <div>
+                        <p class="eyebrow">BASE DES MEMBRES</p>
+                        <h2>Membres</h2>
+                        <p class="section-description">
+                            Inscrivez, recherchez et gérez les membres. Cliquez sur une ligne pour voir sa fiche.
+                        </p>
+                    </div>
+
+                    <button type="button" id="bouton-inscrire" class="primary-button">
+                        + Inscrire un membre
+                    </button>
+                </div>
+
+                <section class="form-section page-section" id="inscription" style="display: none;">
 
                 <div class="section-heading">
                     <div>
@@ -324,100 +419,6 @@
 
                 </form>
             </section>
-
-            <!-- PROGRAMME HEBDOMADAIRE -->
-            <section class="page-section" id="programme" style="display: none;">
-
-                <div class="section-heading">
-                    <div>
-                        <p class="eyebrow">ACTIVITÉS DU MOUVEMENT</p>
-                        <h2>Programme hebdomadaire</h2>
-                        <p class="section-description">
-                            Consultez les activités prévues chaque semaine.
-                        </p>
-                    </div>
-
-                    <button
-                        type="button"
-                        id="ajouter-activite"
-                        class="primary-button"
-                    >
-                        + Ajouter une activité
-                    </button>
-                </div>
-
-                <div id="formulaire-activite" style="display: none; margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
-                    <h3>Ajouter une activité</h3>
-
-                    <form id="form-ajout-activite">
-                        <label for="jour-activite">Jour :</label>
-                        <select id="jour-activite" name="jour" required>
-                            <option value="">Choisir un jour</option>
-                            <option value="Lundi">Lundi</option>
-                            <option value="Mercredi">Mercredi</option>
-                            <option value="Jeudi">Jeudi</option>
-                            <option value="Vendredi">Vendredi</option>
-                            <option value="Samedi">Samedi</option>
-                            <option value="Dimanche">Dimanche</option>
-                        </select>
-
-                        <label for="heure-debut-activite">Heure de début :</label>
-                        <input type="time" id="heure-debut-activite" name="heure_debut" required>
-
-                        <label for="heure-fin-activite">Heure de fin :</label>
-                        <input type="time" id="heure-fin-activite" name="heure_fin" required>
-
-                        <label for="nom-activite">Activité :</label>
-                        <input type="text" id="nom-activite" name="activite" required>
-
-                        <label for="lieu-activite">Lieu :</label>
-                        <input type="text" id="lieu-activite" name="lieu">
-
-                        <label for="observations-activite">Observations :</label>
-                        <textarea id="observations-activite" name="observations"></textarea>
-
-                        <button type="submit">Enregistrer l'activité</button>
-                        <button type="button" id="annuler-activite">Annuler</button>
-                    </form>
-                </div>
-
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Jour</th>
-                                <th>Heure</th>
-                                <th>Activité</th>
-                                <th>Lieu</th>
-                                <th>Observations</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-
-                        <tbody id="liste-programme">
-                            <tr>
-                                <td colspan="6">
-                                    Chargement du programme...
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-            </section>
-
-            <!-- LISTE DES MEMBRES -->
-            <section class="liste-membres page-section" id="membres" style="display: none;">
-
-                <div class="section-heading">
-                    <div>
-                        <p class="eyebrow">BASE DES MEMBRES</p>
-                        <h2>Liste des membres</h2>
-                        <p class="section-description">
-                            Recherchez et gérez les membres enregistrés.
-                        </p>
-                    </div>
-                </div>
 
                 <div class="content-card">
 

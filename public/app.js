@@ -1242,3 +1242,30 @@ document.addEventListener("DOMContentLoaded", () => {
     chargerMembresPourBureau();
     chargerListeBureau();
 });
+
+// =====================================
+// RUBRIQUE MEMBRES : FORMULAIRE D'INSCRIPTION INTÉGRÉ
+// =====================================
+const boutonInscrire = document.getElementById("bouton-inscrire");
+const blocInscription = document.getElementById("inscription");
+
+if (boutonInscrire && blocInscription) {
+    const texteOuvrir = "+ Inscrire un membre";
+
+    boutonInscrire.addEventListener("click", () => {
+        const ouvert = blocInscription.style.display === "block";
+
+        blocInscription.style.display = ouvert ? "none" : "block";
+        boutonInscrire.textContent = ouvert ? texteOuvrir : "Fermer le formulaire";
+
+        if (!ouvert) {
+            blocInscription.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+    });
+
+    liensNavigation.forEach(lien => {
+        lien.addEventListener("click", () => {
+            boutonInscrire.textContent = texteOuvrir;
+        });
+    });
+}
