@@ -574,3 +574,37 @@ body .fiche input, body .fiche select {
 @media (max-width: 600px) {
     body .fiche-actions button { flex: 1; }
 }
+
+/* =====================================================
+   POINTAGES : ENTÊTE DE L'ACTIVITÉ ET INFORMATIONS
+   ===================================================== */
+body .pt-entete {
+    display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: flex-end;
+    padding: 16px 20px; margin-bottom: 16px;
+    background: var(--c-50); border: 1px solid var(--c-100); border-radius: var(--rayon);
+}
+body .pt-entete > div { display: flex; flex-direction: column; gap: 2px; }
+body .pt-entete small { color: var(--gris); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+body .pt-entete strong { color: var(--c-800); font-size: 16px; text-transform: capitalize; }
+body .pt-entete .pt-lieu { flex: 1 1 260px; }
+body .main-content .pt-entete input { width: 100%; }
+body .pt-hors-ligne { padding: 10px 14px; border-radius: 9px; background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; }
+body .pt-infos { margin-top: 20px; }
+
+/* =====================================================
+   MODE HORS LIGNE ET INSTALLATION
+   ===================================================== */
+body #bandeau-hors-ligne {
+    display: none; position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+    z-index: 10000; max-width: calc(100% - 32px);
+    padding: 10px 18px; border-radius: 999px; font-size: 14px; font-weight: 600;
+    background: var(--c-800); color: #fff; box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
+}
+body #bandeau-hors-ligne.visible { display: block; }
+body #bandeau-hors-ligne.hors-ligne { background: #9a3412; }
+body #bouton-installer {
+    width: 100%; margin-bottom: 10px; padding: 11px 14px; border-radius: 10px; cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, .35); background: rgba(255, 255, 255, .12);
+    color: #fff; font-weight: 600; font: inherit;
+}
+body #bouton-installer:hover { background: rgba(255, 255, 255, .2); }

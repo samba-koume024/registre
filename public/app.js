@@ -1296,3 +1296,13 @@ if (boutonInscrire && blocInscription) {
         l.addEventListener("click", () => definir(false)));
     window.addEventListener("resize", () => { if (window.innerWidth > 900) definir(false); });
 })();
+
+// Déconnexion : effacer les données gardées pour le mode hors ligne
+(function () {
+    const bouton = document.getElementById("bouton-deconnexion");
+    if (bouton && window.caches) {
+        bouton.addEventListener("click", () => {
+            caches.keys().then(noms => noms.forEach(n => caches.delete(n)));
+        });
+    }
+})();

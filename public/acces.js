@@ -3,7 +3,7 @@
 // =====================================
 (function () {
     const zone = () => document.getElementById("acces-contenu");
-    let membres = [], roles = [], permissions = [];
+    let membres = [], roles = [], permissions = [], fonctions = [], admins = [], fonctionOuverte = "";
 
     const esc = t => String(t ?? "").replace(/[&<>"']/g, c =>
         ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -107,17 +107,44 @@
         });
     }
 
+    function htmlFonctions() {
+        const modules = [...new Set(permissions.map(p => p.module || "Autres"))];
+        const blocs = fonctions.map(f => `
+            <details class="acces-role" data-fonction="${esc(f.fonction)}" ${f.fonction === fonctionOuverte ? "open" : ""}>
+                <summary><strong>${esc(f.fonction)}</strong> <small>(${f.permission_ids.length} permission(s))</small></summary>
+                ${modules.map(mod => `<fieldset><legend>${esc(mod)}</legend>
+                    ${permissions.filter(p => (p.module || "Autres") === mod).map(p => `
+                    <label><input type="checkbox" value="${esc(p.id)}" ${f.permission_ids.includes(p.id) ? "checked" : ""}>
+                    ${esc(p.nom || p.code)}</label>`).join(" ")}</fieldset>`).join("")}
+                <button type="button" data-perms-fonction="${esc(f.fonction)}">Enregistrer les permissions</button>
+            </details>`).join("");
+        return `<div class="content-card"><h3>Permissions par fonction du bureau</h3>
+            <p>Un membre qui occupe une fonction du bureau reçoit automatiquement les permissions cochées ici,
+            en plus de celles de son rôle. Une décision individuelle reste prioritaire.</p>
+            ${blocs || "<p>Aucune fonction attribuée pour l'instant.</p>"}
+            <h4>Ajouter une fonction</h4>
+            <input id="nouvelle-fonction" placeholder="Ex. : Trésorier">
+            <button type="button" id="ajouter-fonction">Ajouter</button></div>`;
+    }
+
+    function dessiner() {
+        const conteneur = zone();
+        if (!conteneur) return;
+        conteneur.innerHTML = htmlAdmins(admins) + htmlRoles() + htmlFonctions() + htmlMembre();
+        brancher(conteneur);
+    }
+
     async function chargerAcces() {
         const conteneur = zone();
         if (!conteneur) return;
         try {
-            const [m, r, p, a] = await Promise.all([
-                api("/api/membres"), api("/api/roles"), api("/api/permissions"), api("/api/administrateurs")
+            const [m, r, p, a, f] = await Promise.all([
+                api("/api/membres"), api("/api/roles"), api("/api/permissions"), api("/api/administrateurs"), api("/api/fonctions-permissions")
             ]);
-            membres = m; roles = r; permissions = p.permissions || p.data || p;
+            membres = m; roles = r; fonctions = f.fonctions || []; permissions = p.permissions || p.data || p;
             if (!Array.isArray(permissions)) permissions = [];
-            conteneur.innerHTML = htmlAdmins(a.administrateurs) + htmlRoles() + htmlMembre();
-            brancher(conteneur);
+            admins = a.administrateurs;
+            dessiner();
         } catch (e) {
             conteneur.textContent = e.message;
         }
@@ -148,6 +175,21 @@
         c.querySelectorAll("[data-perms-role]").forEach(b => b.onclick = () => {
             const ids = [...b.closest(".acces-role").querySelectorAll("input[type=checkbox]:checked")].map(i => i.value);
             agir(() => api(`/api/roles/${b.dataset.permsRole}/permissions`, "PUT", { permission_ids: ids }), "Permissions enregistrées.");
+        });
+        document.getElementById("ajouter-fonction").onclick = () => {
+            const nom = val("nouvelle-fonction");
+            if (!nom) return alert("Saisissez le nom de la fonction.");
+            if (!fonctions.some(f => f.fonction.toLowerCase() === nom.toLowerCase())) {
+                fonctions.push({ fonction: nom, permission_ids: [] });
+            }
+            fonctionOuverte = (fonctions.find(f => f.fonction.toLowerCase() === nom.toLowerCase()) || {}).fonction || nom;
+            dessiner();
+        };
+        c.querySelectorAll("[data-perms-fonction]").forEach(b => b.onclick = () => {
+            const ids = [...b.closest(".acces-role").querySelectorAll("input[type=checkbox]:checked")].map(i => i.value);
+            fonctionOuverte = b.dataset.permsFonction;
+            agir(() => api("/api/fonctions-permissions", "PUT",
+                { fonction: b.dataset.permsFonction, permission_ids: ids }), "Permissions de la fonction enregistrées.");
         });
         document.getElementById("acces-membre").onchange = e =>
             afficherMembre(e.target.value).catch(err => alert(err.message));

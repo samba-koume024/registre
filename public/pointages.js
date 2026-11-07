@@ -34,6 +34,23 @@
 
     const heure = h => (h ? String(h).slice(0, 5) : "");
 
+    // Envoie, ou garde sur l'appareil si la connexion est absente
+    async function envoyer(url, corps, succes) {
+        try {
+            await api(url, "PUT", corps);
+            alert(succes);
+            return true;
+        } catch (e) {
+            if ((e instanceof TypeError || !navigator.onLine) && window.FileAttente) {
+                window.FileAttente.ajouter({ url, methode: "PUT", corps });
+                alert("Hors ligne : enregistré sur cet appareil. Il sera envoyé dès le retour de la connexion.");
+                return true;
+            }
+            alert(e.message);
+            return false;
+        }
+    }
+
     function htmlProgramme() {
         const aujourdhui = JOURS[new Date().getDay()];
         activitesAffichees = [...programme].sort(
@@ -91,7 +108,19 @@
         if (!date) return alert("Choisissez une date.");
 
         try {
-            const d = await api(`/api/pointages?date=${encodeURIComponent(date)}&activite=${encodeURIComponent(activite)}`);
+            let d, info = null, precedente = null, horsLigne = false;
+            try {
+                d = await api(`/api/pointages?date=${encodeURIComponent(date)}&activite=${encodeURIComponent(activite)}`);
+            } catch (e) {
+                if (e instanceof TypeError || !navigator.onLine) { d = { pointages: [] }; horsLigne = true; }
+                else throw e;
+            }
+            if (!horsLigne) {
+                try {
+                    const i = await api(`/api/pointage-infos?date=${encodeURIComponent(date)}&activite=${encodeURIComponent(activite)}`);
+                    info = i.info; precedente = i.precedente;
+                } catch (e) { /* informations facultatives */ }
+            }
             const deja = new Map(d.pointages.map(p => [String(p.membre_id), p]));
 
             const codes = programmeCourant ? (categoriesProgramme[String(programmeCourant.id)] || []) : [];
@@ -109,7 +138,28 @@
                 </tr>`;
             }).join("");
 
-            cible.innerHTML = `
+            const dateLongue = new Date(date + "T00:00:00").toLocaleDateString("fr-FR",
+                { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+            const lieuDefaut = (info && info.lieu) || (programmeCourant && programmeCourant.lieu) || "";
+            const entete = `<div class="pt-entete">
+                    <div><small>Activité</small><strong>${esc(activite || "Appel libre")}</strong></div>
+                    <div><small>Date</small><strong>${esc(dateLongue)}</strong></div>
+                    ${programmeCourant ? `<div><small>Horaire</small><strong>${heure(programmeCourant.heure_debut)}${programmeCourant.heure_fin ? " – " + heure(programmeCourant.heure_fin) : ""}</strong></div>` : ""}
+                    <div class="pt-lieu"><small>Lieu de l'activité</small>
+                        <input type="text" id="pt-lieu" value="${esc(lieuDefaut)}" placeholder="Où se déroule l'activité ?"></div>
+                </div>
+                ${horsLigne ? '<p class="pt-hors-ligne">Mode hors ligne : cet appel sera envoyé dès le retour de la connexion.</p>' : ""}`;
+            const dateFrPrec = precedente ? precedente.date_pointage.split("-").reverse().join("/") : "";
+            const blocInfos = `<div class="content-card pt-infos">
+                    <h3>Informations de la semaine</h3>
+                    <p><small>À mettre à jour chaque semaine pour cette activité.</small></p>
+                    <textarea id="pt-infos" rows="5" placeholder="Informations, rappels, thème, décisions...">${esc(info ? info.informations : "")}</textarea>
+                    ${!info && precedente ? `<p><small>Dernières informations enregistrées le ${dateFrPrec}.</small>
+                        <button type="button" id="pt-reprendre">Reprendre celles de la semaine précédente</button></p>` : ""}
+                    <p><button type="button" class="primary-button" id="pt-enregistrer-infos">Enregistrer les informations</button></p>
+                </div>`;
+
+            cible.innerHTML = `${entete}
                 <p>${programmeCourant ? `<strong>${esc(programmeCourant.activite)}</strong> · ` : ""}${
                     libelles.length ? "Catégories concernées : " + esc(libelles.join(", ")) + " · " : ""}<strong>${concernes.length}</strong> membre(s) à pointer.</p>
                 <p><strong>${d.pointages.length}</strong> pointage(s) déjà enregistré(s) pour cette date.
@@ -119,7 +169,8 @@
                     <tbody>${lignes || '<tr><td colspan="3">Aucun membre dans les catégories concernées.</td></tr>'}</tbody>
                 </table></div>
                 <p id="pt-resume"></p>
-                <button type="button" class="primary-button" id="pt-enregistrer">Enregistrer l'appel</button>`;
+                <button type="button" class="primary-button" id="pt-enregistrer">Enregistrer l'appel</button>
+                ${blocInfos}`;
 
             const resume = () => {
                 const total = {};
@@ -138,12 +189,22 @@
                     statut: tr.querySelector(".pt-statut").value,
                     observation: tr.querySelector(".pt-obs").value.trim()
                 }));
-                try {
-                    const r = await api("/api/pointages", "PUT", { date, activite, pointages: lignesAppel });
-                    alert(r.message);
-                    chargerAppel();
-                } catch (e) { alert(e.message); }
+                const ok = await envoyer("/api/pointages",
+                    { date, activite, pointages: lignesAppel }, "Appel enregistré.");
+                if (ok && navigator.onLine) chargerAppel();
             };
+            const repr = document.getElementById("pt-reprendre");
+            if (repr) repr.onclick = () => {
+                document.getElementById("pt-infos").value = precedente.informations || "";
+                if (precedente.lieu && !document.getElementById("pt-lieu").value) {
+                    document.getElementById("pt-lieu").value = precedente.lieu;
+                }
+            };
+            document.getElementById("pt-enregistrer-infos").onclick = () => envoyer("/api/pointage-infos", {
+                date, activite,
+                lieu: document.getElementById("pt-lieu").value.trim(),
+                informations: document.getElementById("pt-infos").value.trim()
+            }, "Informations enregistrées.");
             resume();
         } catch (e) {
             cible.textContent = e.message;

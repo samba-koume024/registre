@@ -158,6 +158,8 @@ function exigerBureauOuAdministrateur(req, res, next) {
 // 5. SYSTEME DE PERMISSIONS DYNAMIQUES
 // ======================================================
 
+const normaliserFonction = t => String(t ?? "").trim().toLowerCase();
+
 async function verifierPermission(membreId, codePermission) {
   const idMembre = String(membreId);
 
@@ -186,7 +188,7 @@ async function verifierPermission(membreId, codePermission) {
     return exception.decision === "autoriser";
   }
 
-  // 3. Récupérer le rôle du membre
+  // 3. Permission accordée par le rôle du membre
   const { data: attribution, error: erreurRole } = await supabase
     .from("rf_membre_roles")
     .select("role_id")
@@ -194,19 +196,39 @@ async function verifierPermission(membreId, codePermission) {
     .maybeSingle();
 
   if (erreurRole) throw erreurRole;
-  if (!attribution) return false;
 
-  // 4. Vérifier la permission du rôle
-  const { data: autorisation, error: erreurAutorisation } = await supabase
-    .from("rf_role_permissions")
-    .select("id")
-    .eq("role_id", attribution.role_id)
-    .eq("permission_id", permission.id)
-    .maybeSingle();
+  if (attribution) {
+    const { data: autorisation, error: erreurAutorisation } = await supabase
+      .from("rf_role_permissions")
+      .select("id")
+      .eq("role_id", attribution.role_id)
+      .eq("permission_id", permission.id)
+      .maybeSingle();
 
-  if (erreurAutorisation) throw erreurAutorisation;
+    if (erreurAutorisation) throw erreurAutorisation;
+    if (autorisation) return true;
+  }
 
-  return Boolean(autorisation);
+  // 4. Permission accordée par une fonction du bureau
+  const { data: postes, error: erreurPostes } = await supabase
+    .from("fonctions_bureau")
+    .select("fonction")
+    .eq("membre_id", idMembre);
+
+  if (erreurPostes) throw erreurPostes;
+
+  const fonctionsMembre = (postes || []).map(p => normaliserFonction(p.fonction));
+  if (!fonctionsMembre.length) return false;
+
+  const { data: parFonction, error: erreurFonction } = await supabase
+    .from("rf_fonction_permissions")
+    .select("fonction")
+    .eq("permission_id", permission.id);
+
+  if (erreurFonction) throw erreurFonction;
+
+  return (parFonction || []).some(l =>
+    fonctionsMembre.includes(normaliserFonction(l.fonction)));
 }
 
 // Middleware réutilisable pour protéger les routes
@@ -348,6 +370,12 @@ app.get("/inscription.html", (req, res) => {
 
 // Les fichiers CSS et JavaScript sont accessibles publiquement.
 // Les pages privées ci-dessus sont protégées par leurs propres routes.
+app.get("/sw.js", (req, res) => {
+  res.set("Cache-Control", "no-cache");
+  res.type("application/javascript");
+  res.sendFile(path.join(DOSSIER_PUBLIC, "sw.js"));
+});
+
 app.use(express.static(DOSSIER_PUBLIC, { index: false }));
 
 // ======================================================
@@ -2051,6 +2079,18 @@ app.get("/api/membres/:id/permissions", exigerAdministrateur, async (req, res) =
       idsRole = (liens || []).map(lien => lien.permission_id);
     }
 
+    let idsFonction = [];
+    const { data: postes } = await supabase
+      .from("fonctions_bureau").select("fonction").eq("membre_id", membreId);
+    const fonctionsMembre = (postes || []).map(p => normaliserFonction(p.fonction));
+    if (fonctionsMembre.length) {
+      const { data: liensFonction } = await supabase
+        .from("rf_fonction_permissions").select("fonction, permission_id");
+      idsFonction = (liensFonction || [])
+        .filter(l => fonctionsMembre.includes(normaliserFonction(l.fonction)))
+        .map(l => l.permission_id);
+    }
+
     const decisions = new Map(
       (exceptions || []).map(exception => [exception.permission_id, exception.decision])
     );
@@ -2061,11 +2101,12 @@ app.get("/api/membres/:id/permissions", exigerAdministrateur, async (req, res) =
 
       return {
         ...permission,
-        autorisation_role: autorisationRole,
+        autorisation_role: autorisationRole || idsFonction.includes(permission.id),
+        autorisation_fonction: idsFonction.includes(permission.id),
         decision_individuelle: decision,
         autorisee: decision
           ? decision === "autoriser"
-          : autorisationRole
+          : autorisationRole || idsFonction.includes(permission.id)
       };
     });
 
@@ -2611,6 +2652,126 @@ app.put("/api/programme/:id/categories", exigerAdministrateur, async (req, res) 
   } catch (erreur) {
     console.error(erreur);
     reponseErreur(res, "Impossible d'enregistrer les catégories.", 500);
+  }
+});
+
+// ======================================================
+// 22 septies. PERMISSIONS PAR FONCTION DU BUREAU
+// ======================================================
+
+app.get("/api/fonctions-permissions", exigerAdministrateur, async (req, res) => {
+  try {
+    const [{ data: liens, error: e1 }, { data: postes, error: e2 }] = await Promise.all([
+      supabase.from("rf_fonction_permissions").select("fonction, permission_id"),
+      supabase.from("fonctions_bureau").select("fonction")
+    ]);
+    if (e1 || e2) throw e1 || e2;
+
+    const groupes = new Map();
+    const ajouter = nom => {
+      const cle = normaliserFonction(nom);
+      if (cle && !groupes.has(cle)) groupes.set(cle, { fonction: String(nom).trim(), permission_ids: [] });
+      return groupes.get(cle);
+    };
+    (postes || []).forEach(p => ajouter(p.fonction));
+    (liens || []).forEach(l => {
+      const g = ajouter(l.fonction);
+      if (g) g.permission_ids.push(l.permission_id);
+    });
+
+    res.json({ succes: true, fonctions: [...groupes.values()] });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de charger les permissions par fonction.", 500);
+  }
+});
+
+app.put("/api/fonctions-permissions", exigerAdministrateur, async (req, res) => {
+  try {
+    const fonction = nettoyerTexte(req.body.fonction).slice(0, 100);
+    const ids = req.body.permission_ids;
+    if (!fonction) return reponseErreur(res, "Fonction invalide.");
+    if (!Array.isArray(ids) || ids.length > 500) return reponseErreur(res, "Permissions invalides.");
+
+    const uniques = [...new Set(ids)];
+    if (uniques.length) {
+      const { data: existantes, error } = await supabase
+        .from("rf_permissions").select("id").in("id", uniques);
+      if (error) throw error;
+      if ((existantes || []).length !== uniques.length) {
+        return reponseErreur(res, "Permission inconnue.");
+      }
+    }
+
+    const { data: anciennes, error: e1 } = await supabase
+      .from("rf_fonction_permissions").select("fonction");
+    if (e1) throw e1;
+    const noms = [...new Set((anciennes || [])
+      .filter(l => normaliserFonction(l.fonction) === normaliserFonction(fonction))
+      .map(l => l.fonction))];
+    if (noms.length) {
+      const { error } = await supabase
+        .from("rf_fonction_permissions").delete().in("fonction", noms);
+      if (error) throw error;
+    }
+
+    if (uniques.length) {
+      const { error } = await supabase
+        .from("rf_fonction_permissions")
+        .insert(uniques.map(permission_id => ({ fonction, permission_id })));
+      if (error) throw error;
+    }
+    res.json({ succes: true, message: "Permissions de la fonction enregistrées." });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible d'enregistrer les permissions.", 500);
+  }
+});
+
+// ======================================================
+// 22 octies. INFORMATIONS HEBDOMADAIRES DES ACTIVITÉS
+// ======================================================
+
+app.get("/api/pointage-infos", exigerAdministrateur, async (req, res) => {
+  try {
+    const date = nettoyerTexte(req.query.date);
+    const activite = nettoyerTexte(req.query.activite);
+    if (!dateValide(date)) return reponseErreur(res, "Date invalide.");
+
+    const [{ data: info, error: e1 }, { data: precedente, error: e2 }] = await Promise.all([
+      supabase.from("rf_pointage_infos").select("lieu, informations, date_maj")
+        .eq("date_pointage", date).eq("activite", activite).maybeSingle(),
+      supabase.from("rf_pointage_infos").select("date_pointage, lieu, informations")
+        .eq("activite", activite).lt("date_pointage", date)
+        .order("date_pointage", { ascending: false }).limit(1).maybeSingle()
+    ]);
+    if (e1 || e2) throw e1 || e2;
+    res.json({ succes: true, info: info || null, precedente: precedente || null });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de charger les informations.", 500);
+  }
+});
+
+app.put("/api/pointage-infos", exigerAdministrateur, async (req, res) => {
+  try {
+    const date = nettoyerTexte(req.body.date);
+    const activite = nettoyerTexte(req.body.activite).slice(0, 120);
+    if (!dateValide(date)) return reponseErreur(res, "Date invalide.");
+
+    const { error } = await supabase.from("rf_pointage_infos").upsert({
+      date_pointage: date,
+      activite,
+      lieu: nettoyerTexte(req.body.lieu).slice(0, 150) || null,
+      informations: nettoyerTexte(req.body.informations).slice(0, 5000) || null,
+      mis_a_jour_par: String(req.session.administrateur.id),
+      date_maj: new Date().toISOString()
+    }, { onConflict: "date_pointage,activite" });
+    if (error) throw error;
+    res.json({ succes: true, message: "Informations enregistrées." });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible d'enregistrer les informations.", 500);
   }
 });
 
