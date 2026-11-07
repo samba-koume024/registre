@@ -115,8 +115,10 @@
     async function charger() {
         try {
             const [prog, lie, m, b] = await Promise.all([
-                api("/api/programme"), api("/api/programme-categories"),
-                api("/api/membres"), api("/api/bureau")
+                api("/api/programme"),
+                api("/api/programme-categories").catch(() => ({ liens: [] })),
+                api("/api/membres").catch(() => []),
+                api("/api/bureau").catch(() => ({ bureau: [] }))
             ]);
             programme = (Array.isArray(prog) ? prog : []).sort((x, y) =>
                 JOURS.indexOf(x.jour) - JOURS.indexOf(y.jour) ||

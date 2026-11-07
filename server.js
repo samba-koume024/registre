@@ -160,7 +160,45 @@ function exigerBureauOuAdministrateur(req, res, next) {
 
 const normaliserFonction = t => String(t ?? "").trim().toLowerCase();
 
+// Rôle appliqué quand aucun rôle n'a été attribué : « Bureau » pour un membre
+// qui occupe une fonction du bureau, sinon « Membre ».
+async function roleParDefaut(idMembre) {
+  let dansLeBureau = false;
+
+  const { data: postes } = await supabase
+    .from("fonctions_bureau").select("id").eq("membre_id", idMembre).limit(1);
+  if (postes && postes.length) dansLeBureau = true;
+
+  if (!dansLeBureau) {
+    const { data: ancien } = await supabase
+      .from("bureau_membres").select("membre_id").eq("membre_id", idMembre).limit(1);
+    if (ancien && ancien.length) dansLeBureau = true;
+  }
+
+  const { data: roles } = await supabase.from("rf_roles").select("id, nom");
+  const nomCherche = dansLeBureau ? "bureau" : "membre";
+  const trouve = (roles || []).find(
+    r => String(r.nom).trim().toLowerCase() === nomCherche
+  );
+  return trouve ? trouve.id : null;
+}
+
+// Anciennes permissions déjà attribuées dans l'application : elles donnent
+// aussi accès aux nouvelles rubriques correspondantes.
+const PERMISSIONS_EQUIVALENTES = {
+  "membres.voir": ["membres.consulter"],
+  "programme.voir": ["bureau.consulter", "programme.consulter"]
+};
+
 async function verifierPermission(membreId, codePermission) {
+  const codes = [codePermission, ...(PERMISSIONS_EQUIVALENTES[codePermission] || [])];
+  for (const code of codes) {
+    if (await verifierPermissionExacte(membreId, code)) return true;
+  }
+  return false;
+}
+
+async function verifierPermissionExacte(membreId, codePermission) {
   const idMembre = String(membreId);
 
   // 1. Rechercher la permission
@@ -197,11 +235,13 @@ async function verifierPermission(membreId, codePermission) {
 
   if (erreurRole) throw erreurRole;
 
-  if (attribution) {
+  const roleEffectif = attribution ? attribution.role_id : await roleParDefaut(idMembre);
+
+  if (roleEffectif) {
     const { data: autorisation, error: erreurAutorisation } = await supabase
       .from("rf_role_permissions")
       .select("id")
-      .eq("role_id", attribution.role_id)
+      .eq("role_id", roleEffectif)
       .eq("permission_id", permission.id)
       .maybeSingle();
 
@@ -400,6 +440,7 @@ app.get("/", async (req, res) => {
   }
 
   if (req.session.membre) {
+    console.log(`[accès] membre ${req.session.membre.membre_id} : aucune permission de gestion trouvée, redirection vers sa page personnelle.`);
     if (req.session.membre.role === "bureau") {
       return res.redirect("/bureau.html");
     }
@@ -1406,7 +1447,7 @@ app.get(
 // Récupérer les fonctions du bureau
 app.get(
   "/api/bureau",
-  exigerUneDes([...ACCES_ANNUAIRE, "bureau.gerer"]),
+  exigerUneDes([...ACCES_ANNUAIRE, "bureau.gerer", "bureau.consulter"]),
   async (req, res) => {
     try {
       const { data, error } = await supabase
@@ -2119,11 +2160,13 @@ app.get("/api/membres/:id/permissions", exigerAdministrateur, async (req, res) =
     let role = null;
     let idsRole = [];
 
-    if (attribution) {
+    const roleEffectif = attribution ? attribution.role_id : await roleParDefaut(String(membreId));
+
+    if (roleEffectif) {
       const { data: roleData, error: erreurRole } = await supabase
         .from("rf_roles")
         .select("id, nom, description, est_systeme")
-        .eq("id", attribution.role_id)
+        .eq("id", roleEffectif)
         .maybeSingle();
 
       if (erreurRole) {
@@ -2135,7 +2178,7 @@ app.get("/api/membres/:id/permissions", exigerAdministrateur, async (req, res) =
       const { data: liens, error: erreurLiens } = await supabase
         .from("rf_role_permissions")
         .select("permission_id")
-        .eq("role_id", attribution.role_id);
+        .eq("role_id", roleEffectif);
 
       if (erreurLiens) {
         console.error(erreurLiens);
@@ -3120,6 +3163,76 @@ app.delete("/api/comptes/:type/:id", exigerAdministrateur, async (req, res) => {
   } catch (erreur) {
     console.error(erreur);
     reponseErreur(res, "Impossible de supprimer le compte.", 500);
+  }
+});
+
+// ======================================================
+// 22 terdecies. DIAGNOSTIC DES ACCÈS (pour l'utilisateur connecté)
+// ======================================================
+
+app.get("/api/diagnostic-acces", exigerMembreConnecte, async (req, res) => {
+  try {
+    if (!req.session.membre) {
+      return res.json({ succes: true, type: "administrateur", message: "Les administrateurs ont tous les droits." });
+    }
+
+    const idMembre = String(req.session.membre.membre_id);
+    const problemes = [];
+    const lire = (nom, resultat) => {
+      if (resultat.error) problemes.push(`${nom} : ${resultat.error.message}`);
+      return resultat.data || [];
+    };
+
+    const [rPerm, rRoles, rPostes, rAncien, rAttrib, rExc, rLiensRole, rLiensFonction] = await Promise.all([
+      supabase.from("rf_permissions").select("id, code"),
+      supabase.from("rf_roles").select("id, nom"),
+      supabase.from("fonctions_bureau").select("fonction").eq("membre_id", idMembre),
+      supabase.from("bureau_membres").select("membre_id").eq("membre_id", idMembre),
+      supabase.from("rf_membre_roles").select("role_id").eq("membre_id", idMembre),
+      supabase.from("rf_membre_permissions").select("permission_id, decision").eq("membre_id", idMembre),
+      supabase.from("rf_role_permissions").select("role_id, permission_id"),
+      supabase.from("rf_fonction_permissions").select("fonction, permission_id")
+    ]);
+
+    const catalogue = lire("rf_permissions", rPerm);
+    const roles = lire("rf_roles", rRoles);
+    const postes = lire("fonctions_bureau", rPostes);
+    const ancien = lire("bureau_membres", rAncien);
+    const attrib = lire("rf_membre_roles", rAttrib);
+    const exceptions = lire("rf_membre_permissions", rExc);
+    const liensRole = lire("rf_role_permissions", rLiensRole);
+    const liensFonction = lire("rf_fonction_permissions", rLiensFonction);
+
+    const codeDe = id => (catalogue.find(p => String(p.id) === String(id)) || {}).code || `?${id}`;
+    const presents = catalogue.map(p => p.code);
+    const roleEffectif = attrib.length ? attrib[0].role_id : await roleParDefaut(idMembre);
+    const nomRole = id => (roles.find(r => String(r.id) === String(id)) || {}).nom || null;
+    const fonctions = postes.map(p => normaliserFonction(p.fonction));
+
+    let effectives = [];
+    try { effectives = await permissionsUtilisateur(req); }
+    catch (e) { problemes.push(`calcul des permissions : ${e.message}`); }
+
+    res.json({
+      succes: true,
+      membre_id: idMembre,
+      role_dans_la_session: req.session.membre.role,
+      est_dans_fonctions_bureau: postes.length > 0,
+      fonctions: postes.map(p => p.fonction),
+      est_dans_bureau_membres: ancien.length > 0,
+      role_attribue_a_la_main: attrib.length ? nomRole(attrib[0].role_id) : null,
+      role_applique: nomRole(roleEffectif),
+      noms_des_roles_existants: roles.map(r => r.nom),
+      permissions_absentes_du_catalogue: CODES_GESTION.filter(c => !presents.includes(c)),
+      permissions_du_role: liensRole.filter(l => String(l.role_id) === String(roleEffectif)).map(l => codeDe(l.permission_id)),
+      permissions_de_la_fonction: liensFonction.filter(l => fonctions.includes(normaliserFonction(l.fonction))).map(l => codeDe(l.permission_id)),
+      decisions_individuelles: exceptions.map(e => `${codeDe(e.permission_id)} : ${e.decision}`),
+      permissions_effectives: effectives,
+      problemes
+    });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, `Diagnostic impossible : ${erreur.message}`, 500);
   }
 });
 
