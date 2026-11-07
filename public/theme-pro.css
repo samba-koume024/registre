@@ -14,7 +14,7 @@
     --c-100: #dbeafe;
     --c-50:  #eff6ff;
     --c-accent: #7db4fb;
-    --fond:     #f1f5f9;
+    --fond:     #eceef0;
     --carte:    #ffffff;
     --bord:     #e2e8f0;
     --texte:    #0f172a;
@@ -313,7 +313,7 @@ body .table-container {
 body .table-container table { width: 100%; border-collapse: collapse; }
 
 body .table-container thead th {
-    background: #eef2f7;
+    background: #e9ecef;
     color: #334155;
     font-size: 12px;
     font-weight: 700;
@@ -327,7 +327,7 @@ body .table-container thead th {
 body .table-container tbody td {
     padding: 13px 16px;
     font-size: 14.5px;
-    border-bottom: 1px solid #edf1f6;
+    border-bottom: 1px solid #eceff1;
     vertical-align: middle;
 }
 
@@ -338,8 +338,8 @@ body .table-container td:last-child button { margin-right: 6px; padding: 6px 12p
 
 /* Tableaux hors .table-container (rapports, supervisions...) */
 body .content-card table:not(.x) { width: 100%; border-collapse: collapse; margin: 8px 0; }
-body .content-card table th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #334155; padding: 10px 12px; background: #eef2f7; border-bottom: 1px solid var(--bord); }
-body .content-card table td { padding: 10px 12px; border-bottom: 1px solid #edf1f6; font-size: 14.5px; }
+body .content-card table th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #334155; padding: 10px 12px; background: #e9ecef; border-bottom: 1px solid var(--bord); }
+body .content-card table td { padding: 10px 12px; border-bottom: 1px solid #eceff1; font-size: 14.5px; }
 
 /* ---------- Pagination ---------- */
 body .pagination-membres { display: flex; align-items: center; justify-content: center; gap: 12px; padding-top: 16px; color: var(--gris); }
@@ -608,3 +608,79 @@ body #bouton-installer {
     color: #fff; font-weight: 600; font: inherit;
 }
 body #bouton-installer:hover { background: rgba(255, 255, 255, .2); }
+
+/* =====================================================
+   ARRIÈRE-PLAN GRIS CLAIR
+   ===================================================== */
+html, body, body .app-layout, body .main-content { background: var(--fond); }
+
+/* =====================================================
+   PROFIL DANS LE MENU (remplace le bouton de déconnexion)
+   ===================================================== */
+body .profil-menu { position: relative; margin-top: 8px; }
+
+body .profil-bouton {
+    width: 100%; display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px; border-radius: 12px; cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, .18); background: rgba(255, 255, 255, .08);
+    color: #fff; font: inherit; text-align: left;
+    transition: background .15s ease;
+}
+body .profil-bouton:hover { background: rgba(255, 255, 255, .15); }
+
+body .profil-avatar {
+    flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: #fff; color: var(--c-700); font-weight: 700; font-size: 15px; letter-spacing: .5px;
+}
+body .profil-texte { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+body .profil-texte strong { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body .profil-texte small { color: rgba(255, 255, 255, .65); font-size: 12px; }
+body .profil-fleche { opacity: .7; transition: transform .15s ease; }
+body .profil-bouton[aria-expanded="true"] .profil-fleche { transform: rotate(180deg); }
+
+body .profil-liste {
+    position: absolute; left: 0; right: 0; bottom: calc(100% + 8px);
+    background: #fff; border-radius: 12px; padding: 6px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+}
+body .profil-liste[hidden] { display: none; }
+body .profil-liste #bouton-deconnexion {
+    width: 100%; padding: 11px 14px; border: none; border-radius: 8px;
+    background: transparent; color: #b42318; font-weight: 600; text-align: left; cursor: pointer;
+}
+body .profil-liste #bouton-deconnexion:hover { background: #fef3f2; }
+
+/* =====================================================
+   COURBES DU TAUX D'ABSENCE
+   ===================================================== */
+body .sv-courbes-grille {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; margin-top: 12px;
+}
+body .sv-courbe { border: 1px solid var(--bord); border-radius: var(--rayon); padding: 14px 16px; background: #fff; }
+body .sv-courbe h4 { margin: 0 0 4px; font-size: 15px; }
+body .sv-courbe small { color: var(--gris); }
+body .sv-toile { position: relative; height: 230px; margin-top: 10px; }
+@media (max-width: 600px) {
+    body .sv-courbes-grille { grid-template-columns: 1fr; }
+}
+
+/* =====================================================
+   DROITS : ÉLÉMENTS MASQUÉS SELON LES PERMISSIONS
+   ===================================================== */
+[data-interdit] { display: none !important; }
+
+body:not(.droit-programme-gerer) #ajouter-activite,
+body:not(.droit-programme-gerer) #programme-categories,
+body:not(.droit-programme-gerer) #programme .table-container th:last-child,
+body:not(.droit-programme-gerer) #programme .table-container td:last-child { display: none; }
+
+body:not(.droit-membres-inscrire) #bouton-inscrire,
+body:not(.droit-membres-inscrire) #inscription { display: none !important; }
+body:not(.droit-membres-modifier) #fiche-modifier { display: none; }
+body:not(.droit-membres-supprimer) #fiche-supprimer { display: none; }
+
+body:not(.droit-reunions-gerer) #rn-nouvelle,
+body:not(.droit-reunions-gerer) #rn-enregistrer,
+body:not(.droit-reunions-gerer) #rn-supprimer { display: none; }
+

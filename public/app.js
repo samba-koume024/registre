@@ -807,6 +807,10 @@ liensNavigation.forEach(lien => {
             window.chargerPointages();
         }
 
+        if (identifiant === "comptes" && window.chargerComptes) {
+            window.chargerComptes();
+        }
+
         if (identifiant === "acces" && window.chargerAcces) {
             window.chargerAcces();
         }

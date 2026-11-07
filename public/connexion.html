@@ -249,13 +249,7 @@
 
         afficherMessage("Connexion réussie.", "succes");
 
-        if (resultat.role === "administrateur") {
-          window.location.href = "/";
-        } else if (resultat.role === "bureau") {
-          window.location.href = "/bureau.html";
-        } else {
-          window.location.href = "/information.html";
-        }
+        window.location.href = "/";
 
       } catch (erreur) {
         console.error(erreur);

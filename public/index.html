@@ -77,6 +77,11 @@
         Rôles et permissions
     </a>
 
+    <a href="#comptes" class="nav-link">
+        <span class="nav-icon">♙</span>
+        Gestion des comptes
+    </a>
+
     <a href="#gestion-bureau" class="nav-link">
         <span class="nav-icon">♙</span>
         Gestion du Bureau
@@ -89,9 +94,19 @@
                 Registre local
             </div>
 
-            <button id="bouton-deconnexion" type="button">
-                Se déconnecter
-            </button>
+            <div class="profil-menu" id="profil-menu">
+                <div class="profil-liste" id="profil-liste" hidden>
+                    <button id="bouton-deconnexion" type="button">Se déconnecter</button>
+                </div>
+                <button type="button" class="profil-bouton" id="profil-bouton" aria-haspopup="true" aria-expanded="false">
+                    <span class="profil-avatar" id="profil-initiales">··</span>
+                    <span class="profil-texte">
+                        <strong id="profil-nom">Mon profil</strong>
+                        <small id="profil-role">Administrateur</small>
+                    </span>
+                    <span class="profil-fleche" aria-hidden="true">▴</span>
+                </button>
+            </div>
 
         </aside>
 
@@ -576,6 +591,19 @@
 
             <!-- PIED DE PAGE -->
              <!-- SECTION POINTAGES -->
+<section id="comptes" class="page-section" style="display: none;">
+    <div class="section-heading">
+        <div>
+            <p class="eyebrow">ADMINISTRATION</p>
+            <h2>Gestion des comptes</h2>
+            <p class="section-description">
+                Créez, modifiez, désactivez ou supprimez les comptes de connexion.
+            </p>
+        </div>
+    </div>
+    <div id="comptes-contenu">Chargement...</div>
+</section>
+
 <section id="acces" class="page-section" style="display: none;">
     <div class="section-heading">
         <div>
@@ -680,6 +708,9 @@
     <script src="rapports.js"></script>
     <script src="reunions.js"></script>
     <script src="membres-liste.js"></script>
+    <script src="comptes.js"></script>
+    <script src="droits.js"></script>
+    <script src="profil.js"></script>
     <script src="pwa.js"></script>
 
 </body>

@@ -116,13 +116,11 @@
             </div>
             <div class="content-card">
                 <h3>2. Participation</h3>
-                <p>${t.seances} séance(s) pointée(s) · ${t.present} présences · ${t.retard} retards ·
-                ${t.excuse} excusés · ${t.absent} absences · taux de présence :
+                <p>${t.seances} séance(s) pointée(s) · ${t.present} présences · ${t.absent} absences · taux de présence :
                 <strong>${t.taux === null ? "—" : t.taux + " %"}</strong></p>
-                <table><thead><tr><th>Membre</th><th>Présent</th><th>Retard</th><th>Excusé</th><th>Absent</th><th>Taux</th></tr></thead><tbody>
-                ${r.presences.membres.map(m => `<tr><td>${esc(m.nom)}</td><td>${m.present}</td><td>${m.retard}</td>
-                    <td>${m.excuse}</td><td>${m.absent}</td><td>${m.taux === null ? "—" : m.taux + " %"}</td></tr>`).join("")
-                    || '<tr><td colspan="6">Aucun pointage sur cette période.</td></tr>'}
+                <table><thead><tr><th>Membre</th><th>Présent</th><th>Absent</th><th>Taux</th></tr></thead><tbody>
+                ${r.presences.membres.map(m => `<tr><td>${esc(m.nom)}</td><td>${m.present}</td><td>${m.absent}</td><td>${m.taux === null ? "—" : m.taux + " %"}</td></tr>`).join("")
+                    || '<tr><td colspan="4">Aucun pointage sur cette période.</td></tr>'}
                 </tbody></table>
             </div>
             <div class="content-card">
@@ -150,8 +148,7 @@
             ...Object.entries(r.tranches).map(([k, v]) => ({ Indicateur: k, Valeur: v }))
         ]);
         ajouter("Participation", r.presences.membres.map(m => ({
-            Membre: m.nom, Présent: m.present, Retard: m.retard, Excusé: m.excuse,
-            Absent: m.absent, "Taux (%)": m.taux ?? ""
+            Membre: m.nom, Présent: m.present, Absent: m.absent, "Taux (%)": m.taux ?? ""
         })));
         ajouter("Bureau", r.dirigeants.map(d => ({ Membre: d.nom, Fonction: d.fonction })));
         XLSX.writeFile(classeur, `rapport-${r.debut}-${r.fin}.xlsx`);

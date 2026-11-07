@@ -329,11 +329,73 @@ function ouvrirSessionMembre(req, res, membre, compte, role) {
 }
 
 // ======================================================
+// 5 bis. DROITS D'ACCÈS AUX RUBRIQUES DE GESTION
+// ======================================================
+
+const CODES_GESTION = [
+  "membres.voir", "membres.inscrire", "membres.modifier", "membres.supprimer",
+  "programme.voir", "programme.gerer", "pointages.gerer",
+  "supervisions.voir", "rapports.voir",
+  "reunions.voir", "reunions.gerer", "bureau.gerer"
+];
+
+// Permissions qui donnent le droit de consulter la liste des membres
+const ACCES_ANNUAIRE = [
+  "membres.voir", "pointages.gerer", "reunions.voir", "reunions.gerer",
+  "supervisions.voir", "rapports.voir", "programme.gerer"
+];
+
+function idUtilisateur(req) {
+  if (req.session.administrateur) return idUtilisateur(req);
+  return `membre-${req.session.membre.membre_id}`;
+}
+
+// Autorise l'accès si le membre possède AU MOINS UNE des permissions
+function exigerUneDes(codes) {
+  return async (req, res, next) => {
+    if (req.session.administrateur) return next();
+    if (!req.session.membre) {
+      return reponseErreur(res, "Vous devez être connecté.", 401);
+    }
+    try {
+      for (const code of codes) {
+        if (await verifierPermission(req.session.membre.membre_id, code)) return next();
+      }
+      return reponseErreur(res, "Vous n'avez pas la permission nécessaire.", 403);
+    } catch (erreur) {
+      console.error(erreur);
+      return reponseErreur(res, "Erreur lors de la vérification des permissions.", 500);
+    }
+  };
+}
+
+async function permissionsUtilisateur(req) {
+  if (req.session.administrateur) return [...CODES_GESTION];
+  if (!req.session.membre) return [];
+  const accordees = [];
+  for (const code of CODES_GESTION) {
+    if (await verifierPermission(req.session.membre.membre_id, code)) accordees.push(code);
+  }
+  return accordees;
+}
+
+// ======================================================
 // 7. PAGES HTML ET PROTECTION DES ACCÈS
 // ======================================================
 
-app.get("/", (req, res) => {
-  if (req.session.administrateur) {
+async function peutOuvrirApplication(req) {
+  if (req.session.administrateur) return true;
+  if (!req.session.membre) return false;
+  try {
+    return (await permissionsUtilisateur(req)).length > 0;
+  } catch (erreur) {
+    console.error(erreur);
+    return false;
+  }
+}
+
+app.get("/", async (req, res) => {
+  if (await peutOuvrirApplication(req)) {
     return res.sendFile(path.join(DOSSIER_PUBLIC, "index.html"));
   }
 
@@ -348,8 +410,11 @@ app.get("/", (req, res) => {
   res.redirect("/connexion.html");
 });
 
-app.get("/index.html", exigerAdministrateur, (req, res) => {
-  res.sendFile(path.join(DOSSIER_PUBLIC, "index.html"));
+app.get("/index.html", async (req, res) => {
+  if (await peutOuvrirApplication(req)) {
+    return res.sendFile(path.join(DOSSIER_PUBLIC, "index.html"));
+  }
+  res.redirect("/connexion.html");
 });
 
 app.get("/bureau.html", exigerBureauOuAdministrateur, (req, res) => {
@@ -977,7 +1042,7 @@ app.get("/api/status", (req, res) => {
 
 app.get(
   "/api/programme",
-  exigerBureauOuAdministrateur,
+  exigerUneDes(["programme.voir", "pointages.gerer", "bureau.consulter"]),
   async (req, res) => {
     try {
       const { data, error } = await supabase
@@ -1046,7 +1111,7 @@ function validerActivite(body) {
 
 app.post(
   "/api/programme",
-  exigerAdministrateur,
+  exigerPermission("programme.gerer"),
   async (req, res) => {
     try {
       const erreurValidation = validerActivite(req.body);
@@ -1097,7 +1162,7 @@ app.post(
 
 app.put(
   "/api/programme/:id",
-  exigerAdministrateur,
+  exigerPermission("programme.gerer"),
   async (req, res) => {
     try {
       const erreurValidation = validerActivite(req.body);
@@ -1159,7 +1224,7 @@ app.put(
 
 app.delete(
   "/api/programme/:id",
-  exigerAdministrateur,
+  exigerPermission("programme.gerer"),
   async (req, res) => {
     try {
       const id = Number(req.params.id);
@@ -1205,7 +1270,7 @@ app.delete(
 
 app.post(
   "/api/membres",
-  exigerAdministrateur,
+  exigerPermission("membres.inscrire"),
   async (req, res) => {
     try {
       const prenom = nettoyerTexte(req.body.prenom);
@@ -1314,7 +1379,7 @@ if (age < 25) {
 
 app.get(
   "/api/membres",
-  exigerAdministrateur,
+  exigerUneDes(ACCES_ANNUAIRE),
   async (req, res) => {
     try {
       const { data, error } = await supabase
@@ -1341,7 +1406,7 @@ app.get(
 // Récupérer les fonctions du bureau
 app.get(
   "/api/bureau",
-  exigerAdministrateur,
+  exigerUneDes([...ACCES_ANNUAIRE, "bureau.gerer"]),
   async (req, res) => {
     try {
       const { data, error } = await supabase
@@ -1382,7 +1447,7 @@ app.get(
 // Attribuer une fonction à un membre du bureau
 app.post(
   "/api/bureau",
-  exigerAdministrateur,
+  exigerPermission("bureau.gerer"),
   async (req, res) => {
     try {
       const membreId = Number(req.body.membre_id);
@@ -1450,7 +1515,7 @@ app.post(
 // Retirer une fonction du bureau
 app.delete(
   "/api/bureau/:id",
-  exigerAdministrateur,
+  exigerPermission("bureau.gerer"),
   async (req, res) => {
     try {
       const attributionId = Number(req.params.id);
@@ -1542,7 +1607,7 @@ app.get(
 
 app.put(
   "/api/membres/:id",
-  exigerAdministrateur,
+  exigerPermission("membres.modifier"),
   async (req, res) => {
     try {
       const id = Number(req.params.id);
@@ -1663,7 +1728,7 @@ if (age < 25) {
 
 app.delete(
   "/api/membres/:id",
-  exigerAdministrateur,
+  exigerPermission("membres.supprimer"),
   async (req, res) => {
     try {
       const id = Number(req.params.id);
@@ -2195,7 +2260,7 @@ app.put("/api/membres/:id/permissions", exigerAdministrateur, async (req, res) =
           membre_id: String(membreId),
           permission_id: permissionId,
           decision,
-          attribue_par: String(req.session.administrateur.id)
+          attribue_par: idUtilisateur(req)
         },
         { onConflict: "membre_id,permission_id" }
       )
@@ -2302,7 +2367,7 @@ app.put("/api/membres/:id/administrateur", exigerAdministrateur, async (req, res
     const { error } = await supabase
       .from("rf_membres_administrateurs")
       .upsert(
-        { membre_id: String(membreId), promu_par: String(req.session.administrateur.id) },
+        { membre_id: String(membreId), promu_par: idUtilisateur(req) },
         { onConflict: "membre_id" }
       );
     if (error) {
@@ -2346,10 +2411,10 @@ app.delete("/api/membres/:id/administrateur", exigerAdministrateur, async (req, 
 // 22 ter. POINTAGES : PRÉSENCES ET ABSENCES
 // ======================================================
 
-const STATUTS_POINTAGE = ["Présent", "Retard", "Excusé", "Absent"];
+const STATUTS_POINTAGE = ["Présent", "Absent"];
 const dateValide = v => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
 
-app.get("/api/pointages", exigerAdministrateur, async (req, res) => {
+app.get("/api/pointages", exigerPermission("pointages.gerer"), async (req, res) => {
   try {
     const date = nettoyerTexte(req.query.date);
     const activite = nettoyerTexte(req.query.activite);
@@ -2371,7 +2436,7 @@ app.get("/api/pointages", exigerAdministrateur, async (req, res) => {
   }
 });
 
-app.put("/api/pointages", exigerAdministrateur, async (req, res) => {
+app.put("/api/pointages", exigerPermission("pointages.gerer"), async (req, res) => {
   try {
     const date = nettoyerTexte(req.body.date);
     const activite = nettoyerTexte(req.body.activite).slice(0, 120);
@@ -2391,7 +2456,7 @@ app.put("/api/pointages", exigerAdministrateur, async (req, res) => {
       activite,
       statut: l.statut,
       observation: nettoyerTexte(l.observation).slice(0, 300) || null,
-      enregistre_par: String(req.session.administrateur.id)
+      enregistre_par: idUtilisateur(req)
     }));
 
     const { error } = await supabase
@@ -2412,7 +2477,7 @@ app.put("/api/pointages", exigerAdministrateur, async (req, res) => {
 // 22 quater. SUPERVISIONS : ANALYSE DES PARTICIPATIONS
 // ======================================================
 
-app.get("/api/supervisions", exigerAdministrateur, async (req, res) => {
+app.get("/api/supervisions", exigerUneDes(["supervisions.voir", "rapports.voir"]), async (req, res) => {
   try {
     const debut = nettoyerTexte(req.query.debut);
     const fin = nettoyerTexte(req.query.fin);
@@ -2525,7 +2590,7 @@ async function remplacerParticipants(reunionId, participants) {
   if (e2) throw e2;
 }
 
-app.get("/api/reunions", exigerAdministrateur, async (req, res) => {
+app.get("/api/reunions", exigerUneDes(["reunions.voir", "reunions.gerer"]), async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("rf_reunions")
@@ -2539,7 +2604,7 @@ app.get("/api/reunions", exigerAdministrateur, async (req, res) => {
   }
 });
 
-app.get("/api/reunions/:id", exigerAdministrateur, async (req, res) => {
+app.get("/api/reunions/:id", exigerUneDes(["reunions.voir", "reunions.gerer"]), async (req, res) => {
   try {
     if (!uuidValide(req.params.id)) return reponseErreur(res, "Identifiant invalide.");
     const [{ data: reunion, error: e1 }, { data: participants, error: e2 }] =
@@ -2557,7 +2622,7 @@ app.get("/api/reunions/:id", exigerAdministrateur, async (req, res) => {
   }
 });
 
-app.post("/api/reunions", exigerAdministrateur, async (req, res) => {
+app.post("/api/reunions", exigerPermission("reunions.gerer"), async (req, res) => {
   try {
     const reunion = lireReunion(req.body);
     const participants = lireParticipants(req.body.participants);
@@ -2565,7 +2630,7 @@ app.post("/api/reunions", exigerAdministrateur, async (req, res) => {
 
     const { data, error } = await supabase
       .from("rf_reunions")
-      .insert({ ...reunion, cree_par: String(req.session.administrateur.id) })
+      .insert({ ...reunion, cree_par: idUtilisateur(req) })
       .select("id").single();
     if (error) throw error;
 
@@ -2577,7 +2642,7 @@ app.post("/api/reunions", exigerAdministrateur, async (req, res) => {
   }
 });
 
-app.put("/api/reunions/:id", exigerAdministrateur, async (req, res) => {
+app.put("/api/reunions/:id", exigerPermission("reunions.gerer"), async (req, res) => {
   try {
     if (!uuidValide(req.params.id)) return reponseErreur(res, "Identifiant invalide.");
     const reunion = lireReunion(req.body);
@@ -2598,7 +2663,7 @@ app.put("/api/reunions/:id", exigerAdministrateur, async (req, res) => {
   }
 });
 
-app.delete("/api/reunions/:id", exigerAdministrateur, async (req, res) => {
+app.delete("/api/reunions/:id", exigerPermission("reunions.gerer"), async (req, res) => {
   try {
     if (!uuidValide(req.params.id)) return reponseErreur(res, "Identifiant invalide.");
     const { error } = await supabase.from("rf_reunions").delete().eq("id", req.params.id);
@@ -2616,7 +2681,7 @@ app.delete("/api/reunions/:id", exigerAdministrateur, async (req, res) => {
 
 const CATEGORIES_PROGRAMME = ["hommes", "femmes", "enfants", "jeunes", "adultes", "bureau"];
 
-app.get("/api/programme-categories", exigerAdministrateur, async (req, res) => {
+app.get("/api/programme-categories", exigerUneDes(["programme.voir", "programme.gerer", "pointages.gerer"]), async (req, res) => {
   try {
     const { data, error } = await supabase
       .from("rf_programme_categories").select("programme_id, categorie");
@@ -2628,7 +2693,7 @@ app.get("/api/programme-categories", exigerAdministrateur, async (req, res) => {
   }
 });
 
-app.put("/api/programme/:id/categories", exigerAdministrateur, async (req, res) => {
+app.put("/api/programme/:id/categories", exigerPermission("programme.gerer"), async (req, res) => {
   try {
     const programmeId = nettoyerTexte(req.params.id);
     const categories = req.body.categories;
@@ -2732,7 +2797,7 @@ app.put("/api/fonctions-permissions", exigerAdministrateur, async (req, res) => 
 // 22 octies. INFORMATIONS HEBDOMADAIRES DES ACTIVITÉS
 // ======================================================
 
-app.get("/api/pointage-infos", exigerAdministrateur, async (req, res) => {
+app.get("/api/pointage-infos", exigerPermission("pointages.gerer"), async (req, res) => {
   try {
     const date = nettoyerTexte(req.query.date);
     const activite = nettoyerTexte(req.query.activite);
@@ -2753,7 +2818,7 @@ app.get("/api/pointage-infos", exigerAdministrateur, async (req, res) => {
   }
 });
 
-app.put("/api/pointage-infos", exigerAdministrateur, async (req, res) => {
+app.put("/api/pointage-infos", exigerPermission("pointages.gerer"), async (req, res) => {
   try {
     const date = nettoyerTexte(req.body.date);
     const activite = nettoyerTexte(req.body.activite).slice(0, 120);
@@ -2764,7 +2829,7 @@ app.put("/api/pointage-infos", exigerAdministrateur, async (req, res) => {
       activite,
       lieu: nettoyerTexte(req.body.lieu).slice(0, 150) || null,
       informations: nettoyerTexte(req.body.informations).slice(0, 5000) || null,
-      mis_a_jour_par: String(req.session.administrateur.id),
+      mis_a_jour_par: idUtilisateur(req),
       date_maj: new Date().toISOString()
     }, { onConflict: "date_pointage,activite" });
     if (error) throw error;
@@ -2772,6 +2837,289 @@ app.put("/api/pointage-infos", exigerAdministrateur, async (req, res) => {
   } catch (erreur) {
     console.error(erreur);
     reponseErreur(res, "Impossible d'enregistrer les informations.", 500);
+  }
+});
+
+// ======================================================
+// 22 nonies. UTILISATEUR CONNECTÉ (profil dans le menu)
+// ======================================================
+
+app.get("/api/moi", exigerMembreConnecte, async (req, res) => {
+  try {
+    const admin = req.session.administrateur ||
+      { identifiant: "", membre_id: req.session.membre.membre_id };
+    let prenom = "";
+    let nom = "";
+
+    if (admin.membre_id) {
+      const { data } = await supabase
+        .from("membres").select("prenom, nom").eq("id", admin.membre_id).maybeSingle();
+      if (data) { prenom = data.prenom || ""; nom = data.nom || ""; }
+    }
+
+    let initiales;
+    let affichage;
+    if (prenom || nom) {
+      initiales = `${prenom.charAt(0)}${nom.charAt(0)}`;
+      affichage = `${prenom} ${nom}`.trim();
+    } else {
+      const mots = String(admin.identifiant || "").trim().split(/\s+/).filter(Boolean);
+      initiales = mots.length > 1
+        ? `${mots[0].charAt(0)}${mots[1].charAt(0)}`
+        : String(mots[0] || "?").slice(0, 2);
+      affichage = String(admin.identifiant || "Administrateur");
+    }
+
+    res.json({
+      succes: true,
+      nom_affiche: affichage,
+      initiales: initiales.toUpperCase(),
+      role: req.session.administrateur ? "Administrateur" : "Membre"
+    });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de charger le profil.", 500);
+  }
+});
+
+// ======================================================
+// 22 decies. ÉVOLUTION DU TAUX D'ABSENCE PAR PROGRAMME
+// ======================================================
+
+app.get("/api/supervisions-evolution", exigerPermission("supervisions.voir"), async (req, res) => {
+  try {
+    const debut = nettoyerTexte(req.query.debut);
+    const fin = nettoyerTexte(req.query.fin);
+    if (!dateValide(debut) || !dateValide(fin) || debut > fin) {
+      return reponseErreur(res, "Période invalide.");
+    }
+
+    const lignes = [];
+    for (let depart = 0; ; depart += 1000) {
+      const { data, error } = await supabase
+        .from("rf_pointages")
+        .select("activite, date_pointage, statut")
+        .gte("date_pointage", debut)
+        .lte("date_pointage", fin)
+        .range(depart, depart + 999);
+      if (error) throw error;
+      lignes.push(...(data || []));
+      if (!data || data.length < 1000) break;
+    }
+
+    const parActivite = new Map();
+    for (const l of lignes) {
+      const present = l.statut === "Présent" || l.statut === "Retard";
+      const absent = l.statut === "Absent";
+      if (!present && !absent) continue;
+
+      if (!parActivite.has(l.activite)) parActivite.set(l.activite, new Map());
+      const jours = parActivite.get(l.activite);
+      if (!jours.has(l.date_pointage)) jours.set(l.date_pointage, { present: 0, absent: 0 });
+      const jour = jours.get(l.date_pointage);
+      if (present) jour.present++; else jour.absent++;
+    }
+
+    const series = [...parActivite.entries()].map(([activite, jours]) => ({
+      activite: activite || "Appel libre",
+      points: [...jours.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([date, v]) => ({
+          date,
+          absents: v.absent,
+          total: v.present + v.absent,
+          taux: Math.round((v.absent / (v.present + v.absent)) * 100)
+        }))
+    })).sort((a, b) => a.activite.localeCompare(b.activite, "fr"));
+
+    res.json({ succes: true, series });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de charger l'évolution des absences.", 500);
+  }
+});
+
+// ======================================================
+// 22 undecies. PERMISSIONS DE L'UTILISATEUR CONNECTÉ
+// ======================================================
+
+app.get("/api/mes-permissions", exigerMembreConnecte, async (req, res) => {
+  try {
+    res.json({
+      succes: true,
+      administrateur: Boolean(req.session.administrateur),
+      permissions: await permissionsUtilisateur(req)
+    });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de charger vos permissions.", 500);
+  }
+});
+
+// ======================================================
+// 22 duodecies. GESTION DES COMPTES (administrateurs seulement)
+// ======================================================
+
+const TYPES_COMPTE = { administrateur: "administrateurs", membre: "comptes_membres" };
+
+async function compterAdministrateurs() {
+  const [{ count: a }, { count: b }] = await Promise.all([
+    supabase.from("administrateurs").select("*", { count: "exact", head: true }),
+    supabase.from("rf_membres_administrateurs").select("*", { count: "exact", head: true })
+  ]);
+  return (a || 0) + (b || 0);
+}
+
+app.get("/api/comptes", exigerAdministrateur, async (req, res) => {
+  try {
+    const [r1, r2, r3, r4] = await Promise.all([
+      supabase.from("administrateurs").select("id, identifiant"),
+      supabase.from("comptes_membres").select("id, membre_id, actif, compte_verifie"),
+      supabase.from("membres").select("id, prenom, nom"),
+      supabase.from("rf_membres_administrateurs").select("membre_id")
+    ]);
+    const erreur = r1.error || r2.error || r3.error || r4.error;
+    if (erreur) throw erreur;
+
+    const membres = new Map((r3.data || []).map(m => [String(m.id), m]));
+    const promus = new Set((r4.data || []).map(p => String(p.membre_id)));
+    const avecCompte = new Set((r2.data || []).map(c => String(c.membre_id)));
+    const nomDe = id => {
+      const m = membres.get(String(id));
+      return m ? `${m.prenom} ${m.nom}` : "Membre supprimé";
+    };
+
+    res.json({
+      succes: true,
+      moi: req.session.administrateur.id,
+      administrateurs: r1.data || [],
+      comptes: (r2.data || []).map(c => ({
+        id: c.id,
+        membre_id: c.membre_id,
+        nom: nomDe(c.membre_id),
+        actif: c.actif === true,
+        administrateur: promus.has(String(c.membre_id))
+      })).sort((a, b) => a.nom.localeCompare(b.nom, "fr")),
+      sans_compte: (r3.data || [])
+        .filter(m => !avecCompte.has(String(m.id)))
+        .sort((a, b) => `${a.prenom} ${a.nom}`.localeCompare(`${b.prenom} ${b.nom}`, "fr"))
+    });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de charger les comptes.", 500);
+  }
+});
+
+app.post("/api/comptes/administrateur", exigerAdministrateur, async (req, res) => {
+  try {
+    const identifiant = nettoyerTexte(req.body.identifiant).slice(0, 60);
+    const motDePasse = typeof req.body.mot_de_passe === "string" ? req.body.mot_de_passe : "";
+    if (identifiant.length < 3) return reponseErreur(res, "L'identifiant doit contenir au moins 3 caractères.");
+    if (motDePasse.length < 10) return reponseErreur(res, "Le mot de passe doit contenir au moins 10 caractères.");
+
+    const { data: existant, error: e1 } = await supabase
+      .from("administrateurs").select("id").eq("identifiant", identifiant).maybeSingle();
+    if (e1) throw e1;
+    if (existant) return reponseErreur(res, "Cet identifiant existe déjà.");
+
+    const { error } = await supabase.from("administrateurs")
+      .insert({ identifiant, mot_de_passe_hash: await bcrypt.hash(motDePasse, 12) });
+    if (error) throw error;
+    res.status(201).json({ succes: true, message: "Compte administrateur créé." });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de créer le compte.", 500);
+  }
+});
+
+app.post("/api/comptes/membre", exigerAdministrateur, async (req, res) => {
+  try {
+    const membreId = nettoyerTexte(String(req.body.membre_id ?? ""));
+    const motDePasse = typeof req.body.mot_de_passe === "string" ? req.body.mot_de_passe : "";
+    if (!membreId) return reponseErreur(res, "Membre invalide.");
+    if (motDePasse.length < 8) return reponseErreur(res, "Le mot de passe doit contenir au moins 8 caractères.");
+
+    const { data: membre, error: e1 } = await supabase
+      .from("membres").select("id").eq("id", membreId).maybeSingle();
+    if (e1) throw e1;
+    if (!membre) return reponseErreur(res, "Membre introuvable.", 404);
+
+    const { data: existant, error: e2 } = await supabase
+      .from("comptes_membres").select("id").eq("membre_id", membre.id).maybeSingle();
+    if (e2) throw e2;
+    if (existant) return reponseErreur(res, "Ce membre a déjà un compte.");
+
+    const { error } = await supabase.from("comptes_membres").insert({
+      membre_id: membre.id,
+      mot_de_passe_hash: await bcrypt.hash(motDePasse, 12),
+      compte_verifie: true,
+      actif: true
+    });
+    if (error) throw error;
+    res.status(201).json({ succes: true, message: "Compte créé." });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de créer le compte.", 500);
+  }
+});
+
+app.put("/api/comptes/:type/:id/mot-de-passe", exigerAdministrateur, async (req, res) => {
+  try {
+    const table = TYPES_COMPTE[req.params.type];
+    if (!table) return reponseErreur(res, "Type de compte invalide.");
+    const minimum = req.params.type === "administrateur" ? 10 : 8;
+    const motDePasse = typeof req.body.mot_de_passe === "string" ? req.body.mot_de_passe : "";
+    if (motDePasse.length < minimum) {
+      return reponseErreur(res, `Le mot de passe doit contenir au moins ${minimum} caractères.`);
+    }
+
+    const { data, error } = await supabase.from(table)
+      .update({ mot_de_passe_hash: await bcrypt.hash(motDePasse, 12) })
+      .eq("id", req.params.id).select("id");
+    if (error) throw error;
+    if (!data || data.length !== 1) return reponseErreur(res, "Compte introuvable.", 404);
+    res.json({ succes: true, message: "Mot de passe modifié." });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de modifier le mot de passe.", 500);
+  }
+});
+
+app.put("/api/comptes/membre/:id/statut", exigerAdministrateur, async (req, res) => {
+  try {
+    if (typeof req.body.actif !== "boolean") return reponseErreur(res, "Statut invalide.");
+    const { data, error } = await supabase.from("comptes_membres")
+      .update({ actif: req.body.actif }).eq("id", req.params.id).select("id");
+    if (error) throw error;
+    if (!data || data.length !== 1) return reponseErreur(res, "Compte introuvable.", 404);
+    res.json({ succes: true, message: req.body.actif ? "Compte activé." : "Compte désactivé." });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de modifier le compte.", 500);
+  }
+});
+
+app.delete("/api/comptes/:type/:id", exigerAdministrateur, async (req, res) => {
+  try {
+    const table = TYPES_COMPTE[req.params.type];
+    if (!table) return reponseErreur(res, "Type de compte invalide.");
+
+    if (req.params.type === "administrateur") {
+      if (String(req.params.id) === String(req.session.administrateur.id)) {
+        return reponseErreur(res, "Vous ne pouvez pas supprimer votre propre compte.");
+      }
+      if ((await compterAdministrateurs()) <= 1) {
+        return reponseErreur(res, "Impossible de supprimer le dernier administrateur.");
+      }
+    }
+
+    const { data, error } = await supabase.from(table).delete().eq("id", req.params.id).select("id");
+    if (error) throw error;
+    if (!data || data.length !== 1) return reponseErreur(res, "Compte introuvable.", 404);
+    res.json({ succes: true, message: "Compte supprimé." });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de supprimer le compte.", 500);
   }
 });
 

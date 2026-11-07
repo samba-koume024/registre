@@ -2,7 +2,7 @@
 // POINTAGES : PRÉSENCES ET ABSENCES
 // =====================================
 (function () {
-    const STATUTS = ["Présent", "Retard", "Excusé", "Absent"];
+    const STATUTS = ["Présent", "Absent"];
     const zone = () => document.getElementById("pointages-contenu");
     const JOURS = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
     let membres = [], programme = [], activitesAffichees = [], categoriesProgramme = {}, bureauIds = [], programmeCourant = null;
@@ -132,7 +132,7 @@
                 return `<tr data-membre="${esc(m.id)}">
                     <td>${esc(m.prenom)} ${esc(m.nom)}</td>
                     <td><select class="pt-statut">
-                        ${STATUTS.map(s => `<option ${((p && p.statut) || "Présent") === s ? "selected" : ""}>${s}</option>`).join("")}
+                        ${STATUTS.map(s => `<option ${(p ? (p.statut === "Retard" ? "Présent" : p.statut === "Excusé" ? "Absent" : p.statut) : "Absent") === s ? "selected" : ""}>${s}</option>`).join("")}
                     </select></td>
                     <td><input type="text" class="pt-obs" value="${esc(p ? p.observation : "")}" placeholder="Observation"></td>
                 </tr>`;

@@ -98,8 +98,8 @@
             invite = null;
             bouton.remove();
         });
-        const deconnexion = document.getElementById("bouton-deconnexion");
-        if (deconnexion && deconnexion.parentNode) deconnexion.parentNode.insertBefore(bouton, deconnexion);
+        const profil = document.getElementById("profil-menu");
+        if (profil && profil.parentNode) profil.parentNode.insertBefore(bouton, profil);
     });
     window.addEventListener("appinstalled", () => {
         const b = document.getElementById("bouton-installer");
