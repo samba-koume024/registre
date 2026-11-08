@@ -31,6 +31,7 @@
                 <small>Taux de présence = présents ÷ (présents + absents).</small>
             </div>
             <div id="sv-resultat"></div>
+            <div id="sv-inactifs"></div>
             <div id="sv-courbes"></div>`;
 
         document.getElementById("sv-analyser").onclick = analyser;
@@ -42,6 +43,7 @@
         const debut = document.getElementById("sv-debut").value;
         const fin = document.getElementById("sv-fin").value;
         afficherCourbes(debut, fin);
+        afficherInactifs();
         const seuil = Math.max(1, Number(document.getElementById("sv-seuil").value) || 3);
         if (!debut || !fin) return alert("Choisissez les deux dates.");
 
@@ -82,6 +84,29 @@
                 </div>`;
         } catch (e) {
             cible.textContent = e.message;
+        }
+    }
+
+    // ---------- Membres inactifs : plus de 5 absences à une même activité ----------
+    async function afficherInactifs() {
+        const cible = document.getElementById("sv-inactifs");
+        if (!cible) return;
+        try {
+            const reponse = await fetch("/api/membres-inactifs");
+            const d = await reponse.json().catch(() => ({}));
+            if (!reponse.ok) throw new Error(d.message || "Impossible de charger les inactifs.");
+            cible.innerHTML = `<div class="content-card">
+                <h3>Membres inactifs (${d.inactifs.length})</h3>
+                <p><small>Un membre est classé inactif lorsqu'il a été absent plus de ${d.seuil} fois à une même activité.</small></p>
+                ${d.inactifs.length ? `<div class="table-container"><table>
+                    <thead><tr><th>Membre</th><th>Activité concernée</th><th>Absences</th></tr></thead>
+                    <tbody>${d.inactifs.map(m => m.activites.map((a, i) => `<tr>
+                        <td>${i === 0 ? `<strong>${esc(m.nom)}</strong> <span class="badge-inactif">Inactif</span>` : ""}</td>
+                        <td>${esc(a.activite)}</td><td>${a.absences}</td></tr>`).join("")).join("")}</tbody>
+                </table></div>` : "<p>Aucun membre inactif pour le moment.</p>"}
+            </div>`;
+        } catch (e) {
+            cible.innerHTML = `<div class="content-card"><p>${esc(e.message)}</p></div>`;
         }
     }
 

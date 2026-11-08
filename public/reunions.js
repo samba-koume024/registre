@@ -2,10 +2,10 @@
 // RÉUNIONS : CONVOCATIONS, PARTICIPANTS, PROCÈS-VERBAUX
 // =====================================
 (function () {
-    const PRESENCES = ["Convoqué", "Présent", "Excusé", "Absent"];
+    const PRESENCES = ["Présent", "Excusé", "Absent"];
     const STATUTS = ["Prévue", "Tenue", "Annulée"];
     const zone = () => document.getElementById("reunions-contenu");
-    let membres = [], bureauIds = [], reunions = [], courante = null;
+    let membres = [], bureauIds = [], reunions = [], courante = null, filtre = "";
 
     const esc = t => String(t ?? "").replace(/[&<>"']/g, c =>
         ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -26,25 +26,50 @@
     // ---------- Liste ----------
     function afficherListe() {
         courante = null;
-        const lignes = reunions.map(r => `
-            <tr>
-                <td>${dateFr(r.date_reunion)} ${esc(r.heure)}</td>
-                <td>${esc(r.titre)}</td>
-                <td>${esc(r.lieu)}</td>
-                <td>${esc(r.statut)}</td>
-                <td><button type="button" data-ouvrir="${esc(r.id)}">Ouvrir</button></td>
-            </tr>`).join("");
         zone().innerHTML = `
             <div class="content-card">
-                <p><button type="button" id="rn-nouvelle" class="primary-button">+ Nouvelle réunion</button></p>
-                <div class="table-container"><table>
-                    <thead><tr><th>Date</th><th>Titre</th><th>Lieu</th><th>Statut</th><th></th></tr></thead>
-                    <tbody>${lignes || '<tr><td colspan="5">Aucune réunion enregistrée.</td></tr>'}</tbody>
-                </table></div>
-            </div>`;
+                <p><button type="button" id="rn-nouvelle" class="primary-button">+ Nouvelle réunion</button>
+                <input type="search" id="rn-recherche" placeholder="Rechercher une réunion..." value="${esc(filtre)}"></p>
+            </div>
+            <div id="rn-tableaux"></div>`;
         document.getElementById("rn-nouvelle").onclick = () => afficherFiche(null);
-        zone().querySelectorAll("[data-ouvrir]").forEach(b =>
-            b.onclick = () => ouvrir(b.dataset.ouvrir));
+        document.getElementById("rn-recherche").oninput = e => { filtre = e.target.value; dessinerTableaux(); };
+        dessinerTableaux();
+    }
+
+    function dessinerTableaux() {
+        const cible = document.getElementById("rn-tableaux");
+        if (!cible) return;
+        const aujourdhui = new Date().toLocaleDateString("fr-CA");
+        const motif = filtre.trim().toLowerCase();
+        const jour = r => String(r.date_reunion).slice(0, 10);
+
+        const filtrees = reunions.filter(r =>
+            !motif || `${r.titre} ${r.lieu || ""}`.toLowerCase().includes(motif));
+        const aVenir = filtrees
+            .filter(r => r.statut === "Prévue" && jour(r) >= aujourdhui)
+            .sort((a, b) => jour(a).localeCompare(jour(b)));
+        const historique = filtrees
+            .filter(r => !aVenir.includes(r))
+            .sort((a, b) => jour(b).localeCompare(jour(a)));
+
+        const tableau = liste => `<div class="table-container"><table>
+            <thead><tr><th>Date</th><th>Titre</th><th>Lieu</th><th>Statut</th>
+            <th>Présents</th><th>Absents</th><th>Excusés</th><th></th></tr></thead>
+            <tbody>${liste.map(r => `<tr>
+                <td>${dateFr(r.date_reunion)} ${esc(r.heure)}</td>
+                <td><strong>${esc(r.titre)}</strong></td>
+                <td>${esc(r.lieu)}</td>
+                <td>${esc(r.statut)}</td>
+                <td>${r.presents ?? 0}</td><td>${r.absents ?? 0}</td><td>${r.excuses ?? 0}</td>
+                <td><button type="button" data-ouvrir="${esc(r.id)}">Consulter</button></td>
+            </tr>`).join("") || '<tr><td colspan="8">Aucune réunion.</td></tr>'}</tbody>
+        </table></div>`;
+
+        cible.innerHTML = `
+            <div class="content-card"><h3>Réunions à venir (${aVenir.length})</h3>${tableau(aVenir)}</div>
+            <div class="content-card"><h3>Historique des réunions (${historique.length})</h3>${tableau(historique)}</div>`;
+        cible.querySelectorAll("[data-ouvrir]").forEach(b => b.onclick = () => ouvrir(b.dataset.ouvrir));
     }
 
     async function ouvrir(id) {
@@ -73,18 +98,18 @@
             </div>
             <div class="content-card">
                 <h3>Participants</h3>
-                <p><button type="button" id="rn-tous">Convoquer tous</button>
-                <button type="button" id="rn-bureau">Convoquer le bureau</button>
+                <p><button type="button" id="rn-tous">Sélectionner tous</button>
+                <button type="button" id="rn-bureau">Sélectionner le bureau</button>
                 <button type="button" id="rn-aucun">Aucun</button></p>
                 <div class="table-container"><table>
-                    <thead><tr><th>Convoqué</th><th>Membre</th><th>Présence</th></tr></thead>
+                    <thead><tr><th>Participant</th><th>Membre</th><th>Présence</th></tr></thead>
                     <tbody>${membres.map(m => {
                         const p = part.get(String(m.id));
                         return `<tr data-membre="${esc(m.id)}">
                             <td><input type="checkbox" class="rn-coche" ${p ? "checked" : ""}></td>
                             <td>${esc(m.prenom)} ${esc(m.nom)}</td>
                             <td><select class="rn-presence">${PRESENCES.map(x =>
-                                `<option ${(p || "Convoqué") === x ? "selected" : ""}>${x}</option>`).join("")}</select></td>
+                                `<option ${((p === "Convoqué" ? "Présent" : p) || "Présent") === x ? "selected" : ""}>${x}</option>`).join("")}</select></td>
                         </tr>`;
                     }).join("")}</tbody>
                 </table></div>

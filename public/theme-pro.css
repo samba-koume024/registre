@@ -689,3 +689,11 @@ body:not(.droit-membres-inscrire) #bouton-importer,
 body:not(.droit-membres-inscrire) #import-membres { display: none !important; }
 body #import-membres[hidden], body #dashboard-bureau[hidden] { display: none !important; }
 body #import-membres { margin-bottom: 20px; }
+
+/* Membres inactifs */
+body .badge-inactif {
+    display: inline-block; margin-left: 6px; padding: 1px 9px; border-radius: 999px;
+    background: #fef3f2; color: #b42318; border: 1px solid #f0c4c0;
+    font-size: 11.5px; font-weight: 700; vertical-align: middle;
+}
+body #filtre-statut-membre { margin-left: 10px; }

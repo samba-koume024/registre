@@ -2685,7 +2685,7 @@ app.get("/api/supervisions", exigerUneDes(["supervisions.voir", "rapports.voir"]
 // ======================================================
 
 const STATUTS_REUNION = ["Prévue", "Tenue", "Annulée"];
-const PRESENCES_REUNION = ["Convoqué", "Présent", "Excusé", "Absent"];
+const PRESENCES_REUNION = ["Présent", "Excusé", "Absent"];
 
 function lireReunion(corps) {
   const titre = nettoyerTexte(corps.titre).slice(0, 150);
@@ -2707,7 +2707,7 @@ function lireParticipants(liste) {
   if (!Array.isArray(liste) || liste.length > 2000) return null;
   const vus = new Map();
   for (const p of liste) {
-    const presence = PRESENCES_REUNION.includes(p.presence) ? p.presence : "Convoqué";
+    const presence = PRESENCES_REUNION.includes(p.presence) ? p.presence : "Présent";
     vus.set(String(p.membre_id), presence);
   }
   return [...vus].map(([membre_id, presence]) => ({ membre_id, presence }));
@@ -2731,7 +2731,35 @@ app.get("/api/reunions", exigerUneDes(["reunions.voir", "reunions.gerer"]), asyn
       .select("id, titre, date_reunion, heure, lieu, statut")
       .order("date_reunion", { ascending: false });
     if (error) throw error;
-    res.json({ succes: true, reunions: data || [] });
+
+    const reunions = data || [];
+    const effectifs = new Map(reunions.map(r => [r.id, { presents: 0, absents: 0, excuses: 0 }]));
+    const ids = reunions.map(r => r.id);
+
+    for (let i = 0; i < ids.length; i += 100) {
+      const lot = ids.slice(i, i + 100);
+      for (let depart = 0; ; depart += 1000) {
+        const { data: parts, error: erreurParts } = await supabase
+          .from("rf_reunion_participants")
+          .select("reunion_id, presence")
+          .in("reunion_id", lot)
+          .range(depart, depart + 999);
+        if (erreurParts) throw erreurParts;
+        (parts || []).forEach(p => {
+          const e = effectifs.get(p.reunion_id);
+          if (!e) return;
+          if (p.presence === "Absent") e.absents++;
+          else if (p.presence === "Excusé") e.excuses++;
+          else e.presents++;
+        });
+        if (!parts || parts.length < 1000) break;
+      }
+    }
+
+    res.json({
+      succes: true,
+      reunions: reunions.map(r => ({ ...r, ...effectifs.get(r.id) }))
+    });
   } catch (erreur) {
     console.error(erreur);
     reponseErreur(res, "Impossible de charger les réunions.", 500);
@@ -3526,6 +3554,64 @@ app.post("/api/membres/import", exigerPermission("membres.inscrire"), async (req
   } catch (erreur) {
     console.error(erreur);
     reponseErreur(res, "Impossible d'importer ce fichier.", 500);
+  }
+});
+
+// ======================================================
+// 22 sexdecies. MEMBRES INACTIFS (plus de 5 absences à une même activité)
+// ======================================================
+
+const SEUIL_INACTIF = 5;
+
+app.get("/api/membres-inactifs", exigerUneDes(["membres.voir", "supervisions.voir", "pointages.gerer"]), async (req, res) => {
+  try {
+    const absences = new Map();
+    for (let depart = 0; ; depart += 1000) {
+      const { data, error } = await supabase
+        .from("rf_pointages")
+        .select("membre_id, activite")
+        .eq("statut", "Absent")
+        .neq("activite", "")
+        .range(depart, depart + 999);
+      if (error) throw error;
+      (data || []).forEach(l => {
+        const cle = `${l.membre_id}|${l.activite}`;
+        absences.set(cle, (absences.get(cle) || 0) + 1);
+      });
+      if (!data || data.length < 1000) break;
+    }
+
+    const parMembre = new Map();
+    for (const [cle, n] of absences) {
+      if (n <= SEUIL_INACTIF) continue;
+      const [membreId, ...reste] = cle.split("|");
+      if (!parMembre.has(membreId)) parMembre.set(membreId, []);
+      parMembre.get(membreId).push({ activite: reste.join("|"), absences: n });
+    }
+
+    const ids = [...parMembre.keys()];
+    const noms = new Map();
+    if (ids.length) {
+      const { data: membres, error } = await supabase
+        .from("membres").select("id, prenom, nom").in("id", ids);
+      if (error) throw error;
+      (membres || []).forEach(m => noms.set(String(m.id), `${m.prenom} ${m.nom}`));
+    }
+
+    const inactifs = ids
+      .filter(id => noms.has(id))
+      .map(id => ({
+        membre_id: id,
+        nom: noms.get(id),
+        activites: parMembre.get(id).sort((a, b) => b.absences - a.absences),
+        total: parMembre.get(id).reduce((t, a) => t + a.absences, 0)
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    res.json({ succes: true, seuil: SEUIL_INACTIF, inactifs });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de calculer les membres inactifs.", 500);
   }
 });
 

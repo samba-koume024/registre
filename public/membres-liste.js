@@ -16,6 +16,38 @@
         return `${r} ans`;
     }
 
+    // ---------- Statut inactif (plus de 5 absences à une même activité) ----------
+    let inactifs = new Map();
+    let statutFiltre = "tous";
+
+    async function chargerInactifs() {
+        try {
+            const r = await fetch("/api/membres-inactifs");
+            if (!r.ok) { inactifs = new Map(); return; }
+            const d = await r.json();
+            inactifs = new Map((d.inactifs || []).map(i => [String(i.membre_id), i]));
+        } catch (e) { inactifs = new Map(); }
+        if (typeof tousLesMembres !== "undefined" && tousLesMembres.length) {
+            if (typeof filtrerMembres === "function") filtrerMembres();
+            else window.afficherMembres(tousLesMembres);
+        }
+    }
+
+    const barre = document.querySelector(".table-toolbar");
+    if (barre && !document.getElementById("filtre-statut-membre")) {
+        const select = document.createElement("select");
+        select.id = "filtre-statut-membre";
+        select.innerHTML = '<option value="tous">Tous les membres</option><option value="actifs">Actifs</option><option value="inactifs">Inactifs</option>';
+        select.addEventListener("change", () => {
+            statutFiltre = select.value;
+            if (typeof filtrerMembres === "function") filtrerMembres();
+            else window.afficherMembres(tousLesMembres);
+        });
+        barre.appendChild(select);
+    }
+    const lienMembres = document.querySelector('.nav-link[href="#membres"]');
+    if (lienMembres) lienMembres.addEventListener("click", chargerInactifs);
+
     const pagination = document.getElementById("pagination-membres");
     if (pagination) pagination.style.display = "none";
 
@@ -31,6 +63,13 @@
             return;
         }
 
+        if (statutFiltre === "actifs") membres = membres.filter(x => !inactifs.has(String(x.id)));
+        if (statutFiltre === "inactifs") membres = membres.filter(x => inactifs.has(String(x.id)));
+        if (!membres.length) {
+            corps.innerHTML = `<tr><td colspan="2">Aucun membre dans cette catégorie.</td></tr>`;
+            return;
+        }
+
         const tries = [...membres].sort((a, b) =>
             `${a.prenom} ${a.nom}`.localeCompare(`${b.prenom} ${b.nom}`, "fr"));
 
@@ -38,7 +77,8 @@
             const ligne = document.createElement("tr");
             ligne.className = "ligne-membre";
             ligne.title = "Cliquer pour voir la fiche";
-            ligne.innerHTML = `<td><strong>${esc(m.prenom)}</strong></td><td>${esc(m.nom)}</td>`;
+            const inactif = inactifs.has(String(m.id));
+            ligne.innerHTML = `<td><strong>${esc(m.prenom)}</strong></td><td>${esc(m.nom)}${inactif ? ' <span class="badge-inactif">Inactif</span>' : ""}</td>`;
             ligne.addEventListener("click", () => window.ouvrirCarteMembre(m));
             corps.appendChild(ligne);
         });
@@ -83,7 +123,10 @@
                 ["Sexe", membre.sexe], ["Date de naissance", dateFr(membre.date_naissance)],
                 ["Âge", age(membre.date_naissance)], ["Téléphone", membre.telephone],
                 ["E-mail", membre.email], ["Profession", membre.profession],
-                ["Inscrit le", dateFr(membre.date_inscription)]
+                ["Inscrit le", dateFr(membre.date_inscription)],
+                ["Statut", inactifs.has(String(membre.id))
+                    ? "Inactif · " + inactifs.get(String(membre.id)).activites.map(a => `${a.activite} (${a.absences} abs.)`).join(", ")
+                    : "Actif"]
             ];
             fond.innerHTML = `<div class="fiche">${entete()}
                 <div class="fiche-corps">${infos.map(([t, v]) => `
@@ -167,6 +210,8 @@
 
         lecture();
     };
+
+    chargerInactifs();
 
     // Rafraîchit l'affichage avec la nouvelle présentation
     if (typeof tousLesMembres !== "undefined" && tousLesMembres.length) {
