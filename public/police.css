@@ -1,0 +1,15 @@
+/* =====================================================
+   POLICE DE L'APPLICATION : BOOK ANTIQUA
+   Book Antiqua est installée avec Windows / Microsoft Office.
+   Sur les appareils qui ne l'ont pas (Mac, iPhone, Android), le navigateur
+   utilise la police la plus proche de la liste ci-dessous.
+   ===================================================== */
+:root {
+    --police: "Book Antiqua", "Palatino Linotype", Palatino, "URW Palladio L", P052, Georgia, serif;
+}
+
+html, body, button, input, select, textarea, table, th, td, caption,
+h1, h2, h3, h4, h5, h6, p, a, li, span, div, label, small, strong, em,
+summary, legend, option {
+    font-family: var(--police) !important;
+}

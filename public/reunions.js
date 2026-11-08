@@ -170,7 +170,7 @@
         if (!fenetre) return alert("Autorisez les fenêtres pop-up pour imprimer.");
         fenetre.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
             <title>${esc(f.titre)}</title><style>
-            body{font-family:Arial,sans-serif;margin:30px;color:#111}h1{color:#1e40af}
+            body{font-family:\"Book Antiqua\",\"Palatino Linotype\",Palatino,Georgia,serif;margin:30px;color:#111}h1{color:#1e40af}
             table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:6px 8px;text-align:left}
             th{background:#e3ecfb}</style></head><body>${corps}</body></html>`);
         fenetre.document.close();

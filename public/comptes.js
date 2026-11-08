@@ -45,7 +45,7 @@
 
         const lignesMembres = d.comptes.map(c => `
             <tr><td><strong>${esc(c.nom)}</strong> ${c.administrateur ? '<span class="pt-badge">Administrateur</span>' : ""}</td>
-            <td>Membre</td><td>${c.actif ? "Actif" : "<em>Désactivé</em>"}</td>
+            <td>Membre</td><td>${!c.actif ? "<em>Désactivé</em>" : (c.verifie ? "Actif" : "<em>E-mail à confirmer</em>")}</td>
             <td><button type="button" data-mdp="membre" data-id="${esc(c.id)}">Mot de passe</button>
             <button type="button" data-statut="${esc(c.id)}" data-actif="${c.actif}">${c.actif ? "Désactiver" : "Activer"}</button>
             <button type="button" data-admin="${esc(c.membre_id)}" data-promu="${c.administrateur}">${c.administrateur ? "Retirer admin" : "Promouvoir admin"}</button>

@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Créer un compte - Registre Fogny</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="police.css">
 
   <style>
     .inscription-page {
@@ -168,8 +169,9 @@
           autocomplete="tel"
         >
 
-        <label for="email">Adresse e-mail</label>
+        <label for="email">Adresse e-mail (obligatoire)</label>
         <input
+          required
           type="email"
           id="email"
           name="email"
@@ -206,10 +208,22 @@
         <div id="message" class="message" role="alert"></div>
       </form>
 
+      <form id="form-verification" hidden>
+        <p id="texte-verification" class="description"></p>
+
+        <label for="code">Code de vérification (6 chiffres)</label>
+        <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code"
+               maxlength="6" pattern="[0-9]{6}" placeholder="123456" required>
+
+        <button type="submit" id="bouton-verification">Confirmer mon adresse e-mail</button>
+        <button type="button" id="bouton-renvoi">Renvoyer le code</button>
+
+        <div id="message-verification" class="message" role="alert"></div>
+      </form>
+
       <p class="note">
         Vous devez déjà être enregistré dans le Registre Fogny.
-        Renseignez au moins votre téléphone ou votre adresse e-mail,
-        tels qu'ils figurent sur votre fiche membre.
+        Renseignez votre adresse e-mail (obligatoire) : un code de vérification vous y sera envoyé. Si votre fiche membre n'a pas encore d'e-mail, indiquez aussi votre téléphone tel qu'il figure sur votre fiche.
       </p>
 
       <div class="liens">
@@ -239,11 +253,8 @@
       const motDePasse = document.getElementById("mot_de_passe").value;
       const confirmation = document.getElementById("confirmation").value;
 
-      if (!telephone && !email) {
-        afficherMessage(
-          "Renseignez au moins un numéro de téléphone ou une adresse e-mail.",
-          "erreur"
-        );
+      if (!email) {
+        afficherMessage("L'adresse e-mail est obligatoire.", "erreur");
         return;
       }
 
@@ -284,6 +295,11 @@
           return;
         }
 
+        if (resultat.verification_requise) {
+          afficherVerification(resultat.email, resultat.message);
+          return;
+        }
+
         afficherMessage(
           resultat.message + " Vous allez être redirigé...",
           "succes"
@@ -308,6 +324,73 @@
         bouton.textContent = "Créer mon compte";
       }
     });
+
+    // ---------- Confirmation de l'adresse e-mail ----------
+    const formVerification = document.getElementById("form-verification");
+    const messageVerif = document.getElementById("message-verification");
+    let emailEnAttente = "";
+
+    function afficherMessageVerif(texte, type) {
+      messageVerif.textContent = texte;
+      messageVerif.className = "message " + type;
+    }
+
+    function afficherVerification(email, texte) {
+      emailEnAttente = email;
+      formulaire.hidden = true;
+      formVerification.hidden = false;
+      document.getElementById("texte-verification").textContent =
+        texte || "Saisissez le code reçu par e-mail.";
+      document.getElementById("code").focus();
+    }
+
+    formVerification.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const code = document.getElementById("code").value.trim();
+      const b = document.getElementById("bouton-verification");
+      b.disabled = true;
+      try {
+        const reponse = await fetch("/api/auth/verifier-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: emailEnAttente, code })
+        });
+        const resultat = await reponse.json();
+        if (!reponse.ok || !resultat.succes) {
+          afficherMessageVerif(resultat.message || "Code incorrect.", "erreur");
+          return;
+        }
+        afficherMessageVerif(resultat.message, "succes");
+        setTimeout(() => { window.location.href = "/"; }, 1000);
+      } catch (e) {
+        afficherMessageVerif("Impossible de contacter le serveur. Réessayez.", "erreur");
+      } finally {
+        b.disabled = false;
+      }
+    });
+
+    document.getElementById("bouton-renvoi").addEventListener("click", async () => {
+      try {
+        const reponse = await fetch("/api/auth/renvoyer-code", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: emailEnAttente })
+        });
+        const resultat = await reponse.json();
+        afficherMessageVerif(resultat.message || "Erreur.", reponse.ok ? "succes" : "erreur");
+      } catch (e) {
+        afficherMessageVerif("Impossible de contacter le serveur. Réessayez.", "erreur");
+      }
+    });
+
+    // Arrivée depuis la page de connexion avec un compte non confirmé
+    const parametres = new URLSearchParams(window.location.search);
+    if (parametres.has("verifier")) {
+      afficherVerification(
+        parametres.get("verifier"),
+        "Votre adresse e-mail n'est pas encore confirmée. Saisissez le code reçu, ou demandez-en un nouveau."
+      );
+    }
   </script>
 </body>
 </html>

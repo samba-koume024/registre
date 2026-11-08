@@ -1,3 +1,8 @@
+// Police des graphiques
+if (typeof Chart !== "undefined") {
+    Chart.defaults.font.family = '"Book Antiqua", "Palatino Linotype", Palatino, Georgia, serif';
+}
+
 
 const formulaire = document.getElementById("form-membre");
 const message = document.getElementById("message");

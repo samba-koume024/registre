@@ -162,7 +162,7 @@
         fenetre.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
             <title>Rapport Registre Fogny</title>
             <style>
-                body{font-family:Arial,sans-serif;margin:24px;color:#111}
+                body{font-family:\"Book Antiqua\",\"Palatino Linotype\",Palatino,Georgia,serif;margin:24px;color:#111}
                 h3{margin:18px 0 6px;color:#1e40af}
                 table{border-collapse:collapse;width:100%;margin:8px 0}
                 th,td{border:1px solid #999;padding:6px 8px;text-align:left}
