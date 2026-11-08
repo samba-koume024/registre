@@ -395,7 +395,7 @@ const ACCES_ANNUAIRE = [
 ];
 
 function idUtilisateur(req) {
-  if (req.session.administrateur) return idUtilisateur(req);
+  if (req.session.administrateur) return String(req.session.administrateur.id);
   return `membre-${req.session.membre.membre_id}`;
 }
 
@@ -3422,6 +3422,110 @@ app.post("/api/auth/renvoyer-code", limiteConnexion, async (req, res) => {
   } catch (erreur) {
     console.error(erreur);
     reponseErreur(res, "Impossible d'envoyer le code pour le moment.", 500);
+  }
+});
+
+// ======================================================
+// 22 quindecies. IMPORT DE MEMBRES (fichier Excel lu par le navigateur)
+// ======================================================
+
+app.post("/api/membres/import", exigerPermission("membres.inscrire"), async (req, res) => {
+  try {
+    const lignes = req.body.membres;
+    if (!Array.isArray(lignes) || !lignes.length) return reponseErreur(res, "Aucun membre à importer.");
+    if (lignes.length > 1000) return reponseErreur(res, "Maximum 1000 membres par importation.");
+
+    const { data: existants, error: erreurLecture } = await supabase
+      .from("membres").select("prenom, nom, telephone, email, date_naissance");
+    if (erreurLecture) throw erreurLecture;
+
+    const telephones = new Set();
+    const emails = new Set();
+    const identites = new Set();
+    const identite = (p, n, d) =>
+      `${normaliserTexte(p)}|${normaliserTexte(n)}|${String(d || "").slice(0, 10)}`;
+
+    (existants || []).forEach(m => {
+      if (m.telephone) telephones.add(normaliserTelephone(m.telephone));
+      if (m.email) emails.add(normaliserEmail(m.email));
+      identites.add(identite(m.prenom, m.nom, m.date_naissance));
+    });
+
+    const ignores = [];
+    const aInserer = [];
+
+    for (const l of lignes) {
+      const ligne = Number(l.ligne) || 0;
+      const refuser = raison => ignores.push({ ligne, raison });
+
+      const prenom = nettoyerTexte(l.prenom).slice(0, 100);
+      const nom = nettoyerTexte(l.nom).slice(0, 100);
+      const sexe = nettoyerTexte(l.sexe);
+      const dateNaissance = nettoyerTexte(l.date_naissance);
+      const telephone = normaliserTelephone(l.telephone);
+      const email = normaliserEmail(l.email);
+
+      if (!prenom || !nom) { refuser("prénom ou nom manquant"); continue; }
+      if (sexe !== "Masculin" && sexe !== "Féminin") { refuser("sexe invalide"); continue; }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateNaissance) || Number.isNaN(Date.parse(dateNaissance))) {
+        refuser("date de naissance invalide"); continue;
+      }
+      const naissance = new Date(`${dateNaissance}T00:00:00`);
+      if (naissance > new Date() || naissance.getFullYear() < 1900) {
+        refuser("date de naissance impossible"); continue;
+      }
+      if (!telephone && !email) { refuser("téléphone ou e-mail nécessaire"); continue; }
+      if (telephone && !telephoneValide(telephone)) { refuser("téléphone : 9 chiffres attendus"); continue; }
+      if (email && !emailValide(email)) { refuser("e-mail invalide"); continue; }
+
+      if (telephone && telephones.has(telephone)) { refuser("téléphone déjà enregistré"); continue; }
+      if (email && emails.has(email)) { refuser("e-mail déjà enregistré"); continue; }
+      if (identites.has(identite(prenom, nom, dateNaissance))) { refuser("membre déjà enregistré"); continue; }
+
+      const aujourdHui = new Date();
+      let age = aujourdHui.getFullYear() - naissance.getFullYear();
+      if (aujourdHui.getMonth() < naissance.getMonth() ||
+          (aujourdHui.getMonth() === naissance.getMonth() && aujourdHui.getDate() < naissance.getDate())) {
+        age--;
+      }
+      const categorie = age < 25 ? "Cadets" : (sexe === "Masculin" ? "Hommes" : "Femmes");
+
+      if (telephone) telephones.add(telephone);
+      if (email) emails.add(email);
+      identites.add(identite(prenom, nom, dateNaissance));
+
+      aInserer.push({
+        prenom, nom, sexe, categorie,
+        telephone: telephone || null,
+        email: email || null,
+        date_naissance: dateNaissance,
+        profession: nettoyerTexte(l.profession).slice(0, 100) || null
+      });
+    }
+
+    let importes = 0;
+    for (let i = 0; i < aInserer.length; i += 200) {
+      const lot = aInserer.slice(i, i + 200);
+      const { error } = await supabase.from("membres").insert(lot);
+      if (error) {
+        console.error(error);
+        return res.status(500).json({
+          succes: false,
+          message: `L'importation s'est arrêtée : ${importes} membre(s) déjà enregistré(s) avant l'erreur.`
+        });
+      }
+      importes += lot.length;
+    }
+
+    res.status(201).json({
+      succes: true,
+      importes,
+      ignores,
+      message: `${importes} membre(s) importé(s).`
+    });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible d'importer ce fichier.", 500);
   }
 });
 

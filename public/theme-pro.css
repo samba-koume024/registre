@@ -684,3 +684,8 @@ body:not(.droit-reunions-gerer) #rn-nouvelle,
 body:not(.droit-reunions-gerer) #rn-enregistrer,
 body:not(.droit-reunions-gerer) #rn-supprimer { display: none; }
 
+/* Import Excel et carte du bureau */
+body:not(.droit-membres-inscrire) #bouton-importer,
+body:not(.droit-membres-inscrire) #import-membres { display: none !important; }
+body #import-membres[hidden], body #dashboard-bureau[hidden] { display: none !important; }
+body #import-membres { margin-bottom: 20px; }

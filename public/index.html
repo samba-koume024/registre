@@ -183,6 +183,11 @@
                     </div>
 
                 </div>
+
+                <div class="content-card" id="dashboard-bureau">
+                    <h3>Membres du bureau</h3>
+                    <div id="dashboard-bureau-liste">Chargement...</div>
+                </div>
             </section>
 
            <!-- GRAPHIQUE DU TABLEAU DE BORD -->
@@ -309,9 +314,15 @@
                     <button type="button" id="bouton-inscrire" class="primary-button">
                         + Inscrire un membre
                     </button>
+
+                    <button type="button" id="bouton-importer">
+                        Importer un fichier Excel
+                    </button>
                 </div>
 
-                <section class="form-section page-section" id="inscription" style="display: none;">
+<div id="import-membres" hidden></div>
+
+                                <section class="form-section page-section" id="inscription" style="display: none;">
 
                 <div class="section-heading">
                     <div>
@@ -709,6 +720,8 @@
     <script src="rapports.js"></script>
     <script src="reunions.js"></script>
     <script src="membres-liste.js"></script>
+    <script src="membres-import.js"></script>
+    <script src="dashboard-bureau.js"></script>
     <script src="comptes.js"></script>
     <script src="droits.js"></script>
     <script src="profil.js"></script>
