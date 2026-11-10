@@ -5,7 +5,7 @@
     const STATUTS = ["Présent", "Absent"];
     const zone = () => document.getElementById("pointages-contenu");
     const JOURS = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
-    let membres = [], programme = [], activitesAffichees = [], categoriesProgramme = {}, bureauIds = [], programmeCourant = null;
+    let membres = [], programme = [], activitesAffichees = [], categoriesProgramme = {}, bureauIds = [], programmeCourant = null, coursIds = new Set();
 
     const esc = t => String(t ?? "").replace(/[&<>"']/g, c =>
         ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -123,13 +123,14 @@
             }
             const deja = new Map(d.pointages.map(p => [String(p.membre_id), p]));
 
+            const estCours = Boolean(programmeCourant) && coursIds.has(String(programmeCourant.id));
             const codes = programmeCourant ? (categoriesProgramme[String(programmeCourant.id)] || []) : [];
             const concernes = window.membresConcernes(membres, codes, bureauIds);
             const libelles = window.CATEGORIES_FOGNY.filter(c => codes.includes(c.code)).map(c => c.libelle);
 
             const lignes = concernes.map(m => {
                 const p = deja.get(String(m.id));
-                return `<tr data-membre="${esc(m.id)}">
+                return `<tr data-membre="${esc(m.id)}" data-niveau="${esc(window.niveauDe(m))}">
                     <td>${esc(m.prenom)} ${esc(m.nom)}</td>
                     <td><select class="pt-statut">
                         ${STATUTS.map(s => `<option ${(p ? (p.statut === "Retard" ? "Présent" : p.statut === "Excusé" ? "Absent" : p.statut) : "Absent") === s ? "selected" : ""}>${s}</option>`).join("")}
@@ -164,6 +165,9 @@
                     libelles.length ? "Catégories concernées : " + esc(libelles.join(", ")) + " · " : ""}<strong>${concernes.length}</strong> membre(s) à pointer.</p>
                 <p><strong>${d.pointages.length}</strong> pointage(s) déjà enregistré(s) pour cette date.
                 <button type="button" id="pt-tous-presents">Tous présents</button></p>
+                ${estCours ? `<p><label for="pt-niveau">Niveau</label>
+                    <select id="pt-niveau"><option value="">Tous les niveaux</option>
+                    ${window.NIVEAUX_FOGNY.map(n => `<option value="${esc(n.nom)}">${esc(n.nom)}</option>`).join("")}</select></p>` : ""}
                 <p><input type="search" id="pt-recherche" placeholder="Rechercher un membre..." aria-label="Rechercher un membre"></p>
                 <div class="table-container"><table>
                     <thead><tr><th>Membre</th><th>Statut</th><th>Observation</th></tr></thead>
@@ -183,13 +187,19 @@
 
             // Recherche : masque les lignes sans les retirer (les statuts restent enregistrés)
             const normaliser = t => String(t).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-            document.getElementById("pt-recherche").addEventListener("input", e => {
-                const motif = normaliser(e.target.value.trim());
+            const filtrer = () => {
+                const motif = normaliser(document.getElementById("pt-recherche").value.trim());
+                const selection = document.getElementById("pt-niveau");
+                const niveau = selection ? selection.value : "";
                 cible.querySelectorAll("tbody tr[data-membre]").forEach(tr => {
                     const nom = normaliser(tr.children[0].textContent);
-                    tr.style.display = !motif || nom.includes(motif) ? "" : "none";
+                    const visible = (!motif || nom.includes(motif)) && (!niveau || tr.dataset.niveau === niveau);
+                    tr.style.display = visible ? "" : "none";
                 });
-            });
+            };
+            document.getElementById("pt-recherche").addEventListener("input", filtrer);
+            const choixNiveau = document.getElementById("pt-niveau");
+            if (choixNiveau) choixNiveau.addEventListener("change", filtrer);
             document.getElementById("pt-tous-presents").onclick = () => {
                 cible.querySelectorAll(".pt-statut").forEach(s => s.value = "Présent");
                 resume();
@@ -226,6 +236,11 @@
         if (!zone()) return;
         try {
             membres = await api("/api/membres");
+            await window.chargerNiveaux();
+            try {
+                const c = await api("/api/cours");
+                coursIds = new Set((c.cours || []).map(x => String(x.programme_id)));
+            } catch (e) { coursIds = new Set(); }
             try {
                 const b = await api("/api/bureau");
                 bureauIds = (b.bureau || []).map(x => String(x.membre_id));

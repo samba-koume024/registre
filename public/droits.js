@@ -8,6 +8,7 @@
         ["membres", ["membres.voir"]],
         ["programme", ["programme.voir"]],
         ["pointages", ["pointages.gerer"]],
+        ["cours", ["cours.voir", "cours.gerer"]],
         ["supervisions", ["supervisions.voir"]],
         ["rapports", ["rapports.voir"]],
         ["reunions", ["reunions.voir", "reunions.gerer"]],

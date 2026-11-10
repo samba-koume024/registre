@@ -376,13 +376,15 @@ const CODES_GESTION = [
   "membres.voir", "membres.inscrire", "membres.modifier", "membres.supprimer",
   "programme.voir", "programme.gerer", "pointages.gerer",
   "supervisions.voir", "rapports.voir",
-  "reunions.voir", "reunions.gerer", "bureau.gerer"
+  "reunions.voir", "reunions.gerer", "bureau.gerer",
+  "cours.voir", "cours.gerer"
 ];
 
 // Permissions qui donnent le droit de consulter la liste des membres
 const ACCES_ANNUAIRE = [
   "membres.voir", "pointages.gerer", "reunions.voir", "reunions.gerer",
-  "supervisions.voir", "rapports.voir", "programme.gerer"
+  "supervisions.voir", "rapports.voir", "programme.gerer",
+  "cours.voir", "cours.gerer"
 ];
 
 function idUtilisateur(req) {
@@ -1094,7 +1096,7 @@ app.get("/api/status", (req, res) => {
 
 app.get(
   "/api/programme",
-  exigerUneDes(["programme.voir", "pointages.gerer", "bureau.consulter"]),
+  exigerUneDes(["programme.voir", "pointages.gerer", "bureau.consulter", "cours.voir", "cours.gerer"]),
   async (req, res) => {
     try {
       const { data, error } = await supabase
@@ -3434,6 +3436,337 @@ app.get("/api/membres-inactifs", exigerUneDes(["membres.voir", "supervisions.voi
   } catch (erreur) {
     console.error(erreur);
     reponseErreur(res, "Impossible de calculer les membres inactifs.", 500);
+  }
+});
+
+// ======================================================
+// 22 septendecies. COURS : NIVEAUX, ÉVALUATIONS ET NOTES (sur 20)
+// ======================================================
+
+const NIVEAUX_COURS = ["Rawda", "Section 1", "Section 2", "Section 3"];
+const LIRE_COURS = ["cours.voir", "cours.gerer"];
+
+function ageDepuis(dateNaissance) {
+  const n = new Date(dateNaissance);
+  if (!dateNaissance || Number.isNaN(n.getTime())) return null;
+  const auj = new Date();
+  let age = auj.getFullYear() - n.getFullYear();
+  if (auj < new Date(auj.getFullYear(), n.getMonth(), n.getDate())) age--;
+  return age;
+}
+
+function niveauPourAge(age, niveaux) {
+  if (age === null) return null;
+  const n = niveaux.find(x => age >= x.age_min && age <= x.age_max);
+  return n ? n.nom : null;
+}
+
+async function lireNiveaux() {
+  const { data, error } = await supabase.from("rf_niveaux").select("*").order("ordre", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+async function lireNotes(idsEvaluations) {
+  const notes = [];
+  for (let i = 0; i < idsEvaluations.length; i += 100) {
+    const lot = idsEvaluations.slice(i, i + 100);
+    for (let depart = 0; ; depart += 1000) {
+      const { data, error } = await supabase.from("rf_notes")
+        .select("evaluation_id, membre_id, note").in("evaluation_id", lot)
+        .range(depart, depart + 999);
+      if (error) throw error;
+      notes.push(...(data || []));
+      if (!data || data.length < 1000) break;
+    }
+  }
+  return notes;
+}
+
+function statsNotes(valeurs) {
+  if (!valeurs.length) return { moyenne: null, reussite: null };
+  const somme = valeurs.reduce((t, v) => t + v, 0);
+  return {
+    moyenne: Math.round((somme / valeurs.length) * 100) / 100,
+    reussite: Math.round((valeurs.filter(v => v >= 10).length / valeurs.length) * 100)
+  };
+}
+
+app.get("/api/niveaux", exigerUneDes([...LIRE_COURS, "pointages.gerer", "rapports.voir"]), async (req, res) => {
+  try {
+    res.json({ succes: true, niveaux: await lireNiveaux() });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de charger les niveaux.", 500);
+  }
+});
+
+app.put("/api/niveaux", exigerPermission("cours.gerer"), async (req, res) => {
+  try {
+    const liste = req.body.niveaux;
+    if (!Array.isArray(liste) || !liste.length) return reponseErreur(res, "Niveaux invalides.");
+
+    const propres = [];
+    for (const n of liste) {
+      const min = Number(n.age_min);
+      const max = Number(n.age_max);
+      if (!NIVEAUX_COURS.includes(n.nom) || !Number.isInteger(min) || !Number.isInteger(max)
+          || min < 0 || max > 120 || min > max) {
+        return reponseErreur(res, `Tranche d'âge invalide pour « ${nettoyerTexte(n.nom)} ».`);
+      }
+      propres.push({ nom: n.nom, age_min: min, age_max: max });
+    }
+    for (let i = 0; i < propres.length; i++) {
+      for (let j = i + 1; j < propres.length; j++) {
+        if (propres[i].age_min <= propres[j].age_max && propres[j].age_min <= propres[i].age_max) {
+          return reponseErreur(res, `Les tranches d'âge de « ${propres[i].nom} » et « ${propres[j].nom} » se chevauchent.`);
+        }
+      }
+    }
+    for (const n of propres) {
+      const { error } = await supabase.from("rf_niveaux")
+        .update({ age_min: n.age_min, age_max: n.age_max }).eq("nom", n.nom);
+      if (error) throw error;
+    }
+    res.json({ succes: true, message: "Tranches d'âge enregistrées." });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible d'enregistrer les tranches d'âge.", 500);
+  }
+});
+
+app.get("/api/cours", exigerUneDes([...LIRE_COURS, "pointages.gerer", "rapports.voir"]), async (req, res) => {
+  try {
+    const { data, error } = await supabase.from("rf_programme_cours").select("programme_id");
+    if (error) throw error;
+    res.json({ succes: true, cours: data || [] });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de charger les cours.", 500);
+  }
+});
+
+app.put("/api/cours/:programmeId", exigerPermission("cours.gerer"), async (req, res) => {
+  try {
+    const id = nettoyerTexte(req.params.programmeId);
+    const { data: activite, error: e1 } = await supabase
+      .from("programmes_hebdomadaires").select("id").eq("id", id).maybeSingle();
+    if (e1) throw e1;
+    if (!activite) return reponseErreur(res, "Activité introuvable.", 404);
+
+    const { error } = await supabase.from("rf_programme_cours")
+      .upsert({ programme_id: String(activite.id) }, { onConflict: "programme_id" });
+    if (error) throw error;
+    res.json({ succes: true, message: "Cours ajouté." });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible d'ajouter le cours.", 500);
+  }
+});
+
+app.delete("/api/cours/:programmeId", exigerPermission("cours.gerer"), async (req, res) => {
+  try {
+    const id = nettoyerTexte(req.params.programmeId);
+    const { error: e1 } = await supabase.from("rf_evaluations").delete().eq("programme_id", id);
+    if (e1) throw e1;
+    const { error: e2 } = await supabase.from("rf_programme_cours").delete().eq("programme_id", id);
+    if (e2) throw e2;
+    res.json({ succes: true, message: "Cours retiré." });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de retirer le cours.", 500);
+  }
+});
+
+app.get("/api/evaluations", exigerUneDes(LIRE_COURS), async (req, res) => {
+  try {
+    const programmeId = nettoyerTexte(req.query.programme_id);
+    const niveau = nettoyerTexte(req.query.niveau);
+    if (!programmeId || !NIVEAUX_COURS.includes(niveau)) return reponseErreur(res, "Paramètres invalides.");
+
+    const { data, error } = await supabase.from("rf_evaluations").select("*")
+      .eq("programme_id", programmeId).eq("niveau", niveau)
+      .order("date_evaluation", { ascending: false });
+    if (error) throw error;
+
+    const evaluations = data || [];
+    const notes = await lireNotes(evaluations.map(e => e.id));
+    res.json({
+      succes: true,
+      evaluations: evaluations.map(e => {
+        const valeurs = notes.filter(n => n.evaluation_id === e.id).map(n => Number(n.note));
+        return { ...e, nb_notes: valeurs.length, ...statsNotes(valeurs) };
+      })
+    });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de charger les évaluations.", 500);
+  }
+});
+
+app.post("/api/evaluations", exigerPermission("cours.gerer"), async (req, res) => {
+  try {
+    const programmeId = nettoyerTexte(req.body.programme_id);
+    const niveau = nettoyerTexte(req.body.niveau);
+    const titre = nettoyerTexte(req.body.titre).slice(0, 150);
+    const date = nettoyerTexte(req.body.date_evaluation);
+    if (!programmeId || !NIVEAUX_COURS.includes(niveau) || !titre || !dateValide(date)) {
+      return reponseErreur(res, "Titre, niveau ou date invalide.");
+    }
+    const { data: cours, error: e1 } = await supabase
+      .from("rf_programme_cours").select("programme_id").eq("programme_id", programmeId).maybeSingle();
+    if (e1) throw e1;
+    if (!cours) return reponseErreur(res, "Cette activité n'est pas un cours.");
+
+    const { error } = await supabase.from("rf_evaluations").insert({
+      programme_id: programmeId, niveau, titre, date_evaluation: date, cree_par: idUtilisateur(req)
+    });
+    if (error) throw error;
+    res.status(201).json({ succes: true, message: "Évaluation créée." });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de créer l'évaluation.", 500);
+  }
+});
+
+app.get("/api/evaluations/:id", exigerUneDes(LIRE_COURS), async (req, res) => {
+  try {
+    if (!uuidValide(req.params.id)) return reponseErreur(res, "Identifiant invalide.");
+    const { data: evaluation, error } = await supabase
+      .from("rf_evaluations").select("*").eq("id", req.params.id).maybeSingle();
+    if (error) throw error;
+    if (!evaluation) return reponseErreur(res, "Évaluation introuvable.", 404);
+    const notes = await lireNotes([evaluation.id]);
+    res.json({ succes: true, evaluation, notes: notes.map(n => ({ membre_id: n.membre_id, note: Number(n.note) })) });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de charger l'évaluation.", 500);
+  }
+});
+
+app.delete("/api/evaluations/:id", exigerPermission("cours.gerer"), async (req, res) => {
+  try {
+    if (!uuidValide(req.params.id)) return reponseErreur(res, "Identifiant invalide.");
+    const { error } = await supabase.from("rf_evaluations").delete().eq("id", req.params.id);
+    if (error) throw error;
+    res.json({ succes: true, message: "Évaluation supprimée." });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de supprimer l'évaluation.", 500);
+  }
+});
+
+app.put("/api/evaluations/:id/notes", exigerPermission("cours.gerer"), async (req, res) => {
+  try {
+    if (!uuidValide(req.params.id)) return reponseErreur(res, "Identifiant invalide.");
+    const liste = req.body.notes;
+    if (!Array.isArray(liste) || liste.length > 2000) return reponseErreur(res, "Notes invalides.");
+
+    const aEnregistrer = [];
+    const aEffacer = [];
+    for (const n of liste) {
+      const membreId = String(n.membre_id ?? "");
+      if (!membreId) return reponseErreur(res, "Membre invalide.");
+      if (n.note === null || n.note === "" || n.note === undefined) { aEffacer.push(membreId); continue; }
+      const note = Number(n.note);
+      if (!Number.isFinite(note) || note < 0 || note > 20) {
+        return reponseErreur(res, "Les notes doivent être comprises entre 0 et 20.");
+      }
+      aEnregistrer.push({ evaluation_id: req.params.id, membre_id: membreId, note: Math.round(note * 100) / 100 });
+    }
+
+    if (aEnregistrer.length) {
+      const { error } = await supabase.from("rf_notes")
+        .upsert(aEnregistrer, { onConflict: "evaluation_id,membre_id" });
+      if (error) throw error;
+    }
+    if (aEffacer.length) {
+      const { error } = await supabase.from("rf_notes")
+        .delete().eq("evaluation_id", req.params.id).in("membre_id", aEffacer);
+      if (error) throw error;
+    }
+    res.json({ succes: true, message: "Notes enregistrées." });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible d'enregistrer les notes.", 500);
+  }
+});
+
+app.get("/api/cours-rapport", exigerUneDes([...LIRE_COURS, "rapports.voir"]), async (req, res) => {
+  try {
+    const debut = nettoyerTexte(req.query.debut);
+    const fin = nettoyerTexte(req.query.fin);
+    if (!dateValide(debut) || !dateValide(fin) || debut > fin) return reponseErreur(res, "Période invalide.");
+
+    const { data: liens, error: e1 } = await supabase.from("rf_programme_cours").select("programme_id");
+    if (e1) throw e1;
+    const ids = (liens || []).map(l => l.programme_id);
+    if (!ids.length) return res.json({ succes: true, cours: [] });
+
+    const [rProg, niveaux, rMembres] = await Promise.all([
+      supabase.from("programmes_hebdomadaires").select("id, activite, jour").in("id", ids),
+      lireNiveaux(),
+      supabase.from("membres").select("id, date_naissance")
+    ]);
+    if (rProg.error) throw rProg.error;
+    if (rMembres.error) throw rMembres.error;
+
+    const niveauDuMembre = new Map((rMembres.data || []).map(m =>
+      [String(m.id), niveauPourAge(ageDepuis(m.date_naissance), niveaux)]));
+    const effectifs = {};
+    niveauDuMembre.forEach(n => { if (n) effectifs[n] = (effectifs[n] || 0) + 1; });
+
+    const resultat = [];
+    for (const prog of rProg.data || []) {
+      const compteurs = {};
+      niveaux.forEach(n => { compteurs[n.nom] = { presents: 0, absents: 0 }; });
+
+      for (let depart = 0; ; depart += 1000) {
+        const { data, error } = await supabase.from("rf_pointages")
+          .select("membre_id, statut").eq("activite", prog.activite)
+          .gte("date_pointage", debut).lte("date_pointage", fin)
+          .range(depart, depart + 999);
+        if (error) throw error;
+        (data || []).forEach(p => {
+          const n = niveauDuMembre.get(String(p.membre_id));
+          if (!n || !compteurs[n]) return;
+          if (p.statut === "Absent") compteurs[n].absents++;
+          else if (p.statut === "Présent" || p.statut === "Retard") compteurs[n].presents++;
+        });
+        if (!data || data.length < 1000) break;
+      }
+
+      const { data: evals, error: e2 } = await supabase.from("rf_evaluations")
+        .select("id, niveau").eq("programme_id", String(prog.id))
+        .gte("date_evaluation", debut).lte("date_evaluation", fin);
+      if (e2) throw e2;
+      const notes = await lireNotes((evals || []).map(e => e.id));
+
+      resultat.push({
+        programme_id: prog.id,
+        activite: prog.activite,
+        jour: prog.jour,
+        niveaux: niveaux.map(n => {
+          const c = compteurs[n.nom];
+          const base = c.presents + c.absents;
+          const evalsNiveau = (evals || []).filter(e => e.niveau === n.nom);
+          const idsNiveau = new Set(evalsNiveau.map(e => e.id));
+          const valeurs = notes.filter(x => idsNiveau.has(x.evaluation_id)).map(x => Number(x.note));
+          return {
+            niveau: n.nom,
+            effectif: effectifs[n.nom] || 0,
+            presence: base ? Math.round((c.presents / base) * 100) : null,
+            evaluations: evalsNiveau.length,
+            notes: valeurs.length,
+            ...statsNotes(valeurs)
+          };
+        })
+      });
+    }
+    res.json({ succes: true, cours: resultat });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de préparer le rapport des cours.", 500);
   }
 });
 

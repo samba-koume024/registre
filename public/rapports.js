@@ -60,10 +60,11 @@
 
         cible.textContent = "Génération en cours...";
         try {
-            const [membres, presences, bureau] = await Promise.all([
+            const [membres, presences, bureau, coursRapport] = await Promise.all([
                 api("/api/membres"),
                 api(`/api/supervisions?debut=${debut}&fin=${fin}`),
-                api("/api/bureau")
+                api("/api/bureau"),
+                api(`/api/cours-rapport?debut=${debut}&fin=${fin}`).catch(() => ({ cours: [] }))
             ]);
 
             const hommes = membres.filter(m => m.sexe === "Masculin").length;
@@ -90,7 +91,7 @@
             }));
 
             rapport = { debut, fin, total: membres.length, hommes, femmes, nouveaux,
-                tranches, dirigeants, presences };
+                tranches, dirigeants, presences, cours: coursRapport.cours || [] };
             cible.innerHTML = `<div id="rp-document">${construireHtml(rapport)}</div>`;
         } catch (e) {
             cible.textContent = e.message;
@@ -129,7 +130,17 @@
                 ${r.dirigeants.map(d => `<tr><td>${esc(d.nom)}</td><td>${esc(d.fonction)}</td></tr>`).join("")
                     || '<tr><td colspan="2">Aucune fonction attribuée.</td></tr>'}
                 </tbody></table>
-            </div>`;
+            </div>
+            ${r.cours && r.cours.length ? `<div class="content-card">
+                <h3>4. Cours et évaluations</h3>
+                ${r.cours.map(c => `<h4>${esc(c.activite)} <small>(${esc(c.jour)})</small></h4>
+                <table><thead><tr><th>Niveau</th><th>Effectif</th><th>Présence</th><th>Évaluations</th><th>Moyenne / 20</th><th>Réussite (≥ 10)</th></tr></thead><tbody>
+                ${c.niveaux.map(n => `<tr><td>${esc(n.niveau)}</td><td>${n.effectif}</td>
+                    <td>${n.presence === null ? "—" : n.presence + " %"}</td><td>${n.evaluations}</td>
+                    <td>${n.moyenne === null ? "—" : n.moyenne}</td>
+                    <td>${n.reussite === null ? "—" : n.reussite + " %"}</td></tr>`).join("")}
+                </tbody></table>`).join("")}
+            </div>` : ""}`;
     }
 
     function exporter() {
@@ -151,6 +162,13 @@
             Membre: m.nom, Présent: m.present, Absent: m.absent, "Taux (%)": m.taux ?? ""
         })));
         ajouter("Bureau", r.dirigeants.map(d => ({ Membre: d.nom, Fonction: d.fonction })));
+        if (r.cours && r.cours.length) {
+            ajouter("Cours", r.cours.flatMap(c => c.niveaux.map(n => ({
+                Cours: c.activite, Niveau: n.niveau, Effectif: n.effectif,
+                "Présence (%)": n.presence ?? "", Évaluations: n.evaluations,
+                "Moyenne /20": n.moyenne ?? "", "Réussite (%)": n.reussite ?? ""
+            }))));
+        }
         XLSX.writeFile(classeur, `rapport-${r.debut}-${r.fin}.xlsx`);
     }
 

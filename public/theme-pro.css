@@ -697,3 +697,14 @@ body .badge-inactif {
     font-size: 11.5px; font-weight: 700; vertical-align: middle;
 }
 body #filtre-statut-membre { margin-left: 10px; }
+
+/* Cours : niveaux et évaluations */
+body:not(.droit-cours-gerer) .cr-gerer { display: none !important; }
+body .cr-onglet { margin: 0 6px 6px 0; }
+body .main-content .cr-onglet.cr-actif,
+body .main-content button.pt-activite.cr-actif {
+    background: var(--c-700); border-color: var(--c-700); color: #fff;
+}
+body .main-content button.pt-activite.cr-actif small,
+body .main-content button.pt-activite.cr-actif .pt-go { color: #fff; }
+body .cr-note { width: 110px !important; min-width: 0 !important; }

@@ -808,6 +808,10 @@ liensNavigation.forEach(lien => {
             window.chargerProgrammeCategories();
         }
 
+        if (identifiant === "cours" && window.chargerCours) {
+            window.chargerCours();
+        }
+
         if (identifiant === "pointages" && window.chargerPointages) {
             window.chargerPointages();
         }
