@@ -164,6 +164,7 @@
                     libelles.length ? "Catégories concernées : " + esc(libelles.join(", ")) + " · " : ""}<strong>${concernes.length}</strong> membre(s) à pointer.</p>
                 <p><strong>${d.pointages.length}</strong> pointage(s) déjà enregistré(s) pour cette date.
                 <button type="button" id="pt-tous-presents">Tous présents</button></p>
+                <p><input type="search" id="pt-recherche" placeholder="Rechercher un membre..." aria-label="Rechercher un membre"></p>
                 <div class="table-container"><table>
                     <thead><tr><th>Membre</th><th>Statut</th><th>Observation</th></tr></thead>
                     <tbody>${lignes || '<tr><td colspan="3">Aucun membre dans les catégories concernées.</td></tr>'}</tbody>
@@ -179,6 +180,16 @@
                     STATUTS.map(s => `${s} : ${total[s] || 0}`).join(" · ");
             };
             cible.querySelectorAll(".pt-statut").forEach(s => s.onchange = resume);
+
+            // Recherche : masque les lignes sans les retirer (les statuts restent enregistrés)
+            const normaliser = t => String(t).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+            document.getElementById("pt-recherche").addEventListener("input", e => {
+                const motif = normaliser(e.target.value.trim());
+                cible.querySelectorAll("tbody tr[data-membre]").forEach(tr => {
+                    const nom = normaliser(tr.children[1].textContent);
+                    tr.style.display = !motif || nom.includes(motif) ? "" : "none";
+                });
+            });
             document.getElementById("pt-tous-presents").onclick = () => {
                 cible.querySelectorAll(".pt-statut").forEach(s => s.value = "Présent");
                 resume();

@@ -385,6 +385,15 @@
 
     // Arrivée depuis la page de connexion avec un compte non confirmé
     const parametres = new URLSearchParams(window.location.search);
+    if (!parametres.has("verifier")) {
+      formulaire.hidden = true;
+      const avis = document.createElement("p");
+      avis.className = "description";
+      avis.innerHTML = "La création de compte est réservée à l'administrateur.<br>" +
+        "Contactez-le pour obtenir votre accès, puis <a href=\"/connexion.html\">connectez-vous</a>.";
+      formulaire.parentNode.insertBefore(avis, formulaire);
+    }
+
     if (parametres.has("verifier")) {
       afficherVerification(
         parametres.get("verifier"),

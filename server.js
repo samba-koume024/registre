@@ -669,9 +669,19 @@ async function creerEtEnvoyerCode(compteId, email) {
 // ======================================================
 
 
+// Les comptes sont créés uniquement par l'administrateur (rubrique « Gestion des comptes »).
+// Passer cette valeur à true rouvrirait l'inscription libre avec confirmation par e-mail.
+const INSCRIPTION_LIBRE = false;
+
 app.post("/api/auth/inscription-membre", async (req, res) => {
-    console.log("INSCRIPTION REÇUE !");
-    console.log("FICHIER EXÉCUTÉ :", __filename);
+  if (!INSCRIPTION_LIBRE) {
+    return reponseErreur(
+      res,
+      "La création de compte est réservée à l'administrateur. Contactez-le pour obtenir votre accès.",
+      403
+    );
+  }
+
   try {
     const prenom = nettoyerTexte(req.body.prenom);
     const nom = nettoyerTexte(req.body.nom);
