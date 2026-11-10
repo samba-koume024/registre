@@ -186,7 +186,7 @@
             document.getElementById("pt-recherche").addEventListener("input", e => {
                 const motif = normaliser(e.target.value.trim());
                 cible.querySelectorAll("tbody tr[data-membre]").forEach(tr => {
-                    const nom = normaliser(tr.children[1].textContent);
+                    const nom = normaliser(tr.children[0].textContent);
                     tr.style.display = !motif || nom.includes(motif) ? "" : "none";
                 });
             });

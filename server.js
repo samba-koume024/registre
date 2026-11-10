@@ -6,15 +6,6 @@ const path = require("path");
 const session = require("express-session");
 const rateLimit = require("express-rate-limit");
 const bcrypt = require("bcryptjs");
-const crypto = require("crypto");
-
-// Envoi des e-mails : installer avec « npm install nodemailer »
-let nodemailer = null;
-try {
-  nodemailer = require("nodemailer");
-} catch (erreur) {
-  console.warn("nodemailer n'est pas installé : l'envoi des codes par e-mail est impossible.");
-}
 const { createClient } = require("@supabase/supabase-js");
 
 const app = express();
@@ -597,74 +588,6 @@ app.post("/api/auth/login", limiteConnexion, async (req, res) => {
 });
 
 // ======================================================
-// 10 bis. CODES DE VÉRIFICATION PAR E-MAIL
-// ======================================================
-
-const DUREE_CODE_MINUTES = 15;
-const TENTATIVES_MAX = 5;
-let transporteurMail = null;
-
-function obtenirTransporteur() {
-  if (transporteurMail) return transporteurMail;
-  if (!nodemailer) throw new Error("nodemailer n'est pas installé (npm install nodemailer).");
-  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    throw new Error("Service e-mail non configuré : SMTP_HOST, SMTP_USER et SMTP_PASS sont absents du fichier .env.");
-  }
-  const port = Number(process.env.SMTP_PORT || 587);
-  transporteurMail = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port,
-    secure: port === 465,
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-  });
-  return transporteurMail;
-}
-
-function hacherCode(code) {
-  return crypto.createHmac("sha256", process.env.SESSION_SECRET)
-    .update(String(code)).digest("hex");
-}
-
-function masquerEmail(email) {
-  const [local, domaine] = String(email).split("@");
-  return `${local.slice(0, 2)}${"*".repeat(Math.max(1, local.length - 2))}@${domaine}`;
-}
-
-async function envoyerCodeParEmail(destinataire, code) {
-  await obtenirTransporteur().sendMail({
-    from: process.env.MAIL_FROM || process.env.SMTP_USER,
-    to: destinataire,
-    subject: "Votre code de vérification - Registre Fogny",
-    text:
-      `Bonjour,\n\nVotre code de vérification Registre Fogny est : ${code}\n\n` +
-      `Il est valable ${DUREE_CODE_MINUTES} minutes.\n` +
-      `Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.`,
-    html:
-      `<div style="font-family:Georgia,serif;max-width:480px">` +
-      `<h2 style="color:#1e40af">Registre Fogny</h2>` +
-      `<p>Bonjour,</p><p>Votre code de vérification est :</p>` +
-      `<p style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#1e40af">${code}</p>` +
-      `<p>Il est valable ${DUREE_CODE_MINUTES} minutes.</p>` +
-      `<p style="color:#666">Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.</p></div>`
-  });
-}
-
-async function creerEtEnvoyerCode(compteId, email) {
-  const code = String(crypto.randomInt(0, 1000000)).padStart(6, "0");
-
-  await supabase.from("rf_verifications_email").delete().eq("compte_id", String(compteId));
-  const { error } = await supabase.from("rf_verifications_email").insert({
-    compte_id: String(compteId),
-    email,
-    code_hash: hacherCode(code),
-    expire_le: new Date(Date.now() + DUREE_CODE_MINUTES * 60000).toISOString()
-  });
-  if (error) throw error;
-
-  await envoyerCodeParEmail(email, code);
-}
-
-// ======================================================
 // 10. INSCRIPTION D'UN MEMBRE
 // ======================================================
 
@@ -696,10 +619,10 @@ app.post("/api/auth/inscription-membre", async (req, res) => {
       );
     }
 
-    if (!email) {
+    if (!telephone && !email) {
       return reponseErreur(
         res,
-        "L'adresse e-mail est obligatoire pour créer un compte."
+        "Vous devez fournir un téléphone ou une adresse e-mail."
       );
     }
 
@@ -846,7 +769,9 @@ if (
       nouvellesDonnees.telephone = telephone;
     }
 
-    // L'e-mail est enregistré sur la fiche seulement après confirmation du code.
+    if (email && !emailExistant) {
+      nouvellesDonnees.email = email;
+    }
 
     // Vérifier qu'un compte n'existe pas déjà.
     const { data: compteExistant, error: erreurCompte } = await supabase
@@ -943,7 +868,7 @@ if (
       .insert({
         membre_id: membre.id,
         mot_de_passe_hash: motDePasseHash,
-        compte_verifie: false,
+        compte_verifie: true,
         actif: true
       })
       .select()
@@ -966,25 +891,18 @@ if (
       );
     }
 
-    try {
-      await creerEtEnvoyerCode(nouveauCompte.id, email);
-    } catch (erreurMail) {
-      console.error("Envoi du code impossible :", erreurMail);
-      await supabase.from("rf_verifications_email").delete().eq("compte_id", String(nouveauCompte.id));
-      await supabase.from("comptes_membres").delete().eq("id", nouveauCompte.id);
-      return reponseErreur(
-        res,
-        "Impossible d'envoyer le code de vérification par e-mail. Vérifiez l'adresse ou réessayez plus tard.",
-        500
-      );
-    }
+    await ouvrirSessionMembre(
+      req,
+      res,
+      membre,
+      nouveauCompte,
+      role
+    );
 
     res.status(201).json({
       succes: true,
-      verification_requise: true,
-      email,
-      email_masque: masquerEmail(email),
-      message: `Un code de vérification a été envoyé à ${masquerEmail(email)}.`
+      message: "Votre compte a été créé avec succès.",
+      role
     });
 
   } catch (erreur) {
@@ -1090,14 +1008,6 @@ app.post("/api/auth/connexion-membre", limiteConnexion, async (req, res) => {
       );
     }
 
-    if (compte.compte_verifie !== true) {
-      return res.status(403).json({
-        succes: false,
-        verification_requise: true,
-        email: membre.email || "",
-        message: "Votre adresse e-mail n'est pas encore confirmée. Saisissez le code reçu par e-mail."
-      });
-    }
 
     let role = await determinerRoleMembre(membre);
 
@@ -3170,7 +3080,6 @@ app.get("/api/comptes", exigerAdministrateur, async (req, res) => {
         membre_id: c.membre_id,
         nom: nomDe(c.membre_id),
         actif: c.actif === true,
-        verifie: c.compte_verifie === true,
         administrateur: promus.has(String(c.membre_id))
       })).sort((a, b) => a.nom.localeCompare(b.nom, "fr")),
       sans_compte: (r3.data || [])
@@ -3363,103 +3272,6 @@ app.get("/api/diagnostic-acces", exigerMembreConnecte, async (req, res) => {
   } catch (erreur) {
     console.error(erreur);
     reponseErreur(res, `Diagnostic impossible : ${erreur.message}`, 500);
-  }
-});
-
-// ======================================================
-// 22 quaterdecies. CONFIRMATION DE L'ADRESSE E-MAIL
-// ======================================================
-
-async function derniereVerification(email) {
-  const { data, error } = await supabase
-    .from("rf_verifications_email")
-    .select("*")
-    .eq("email", email)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw error;
-  return data;
-}
-
-app.post("/api/auth/verifier-email", limiteConnexion, async (req, res) => {
-  try {
-    const email = normaliserEmail(req.body.email);
-    const code = nettoyerTexte(String(req.body.code ?? "")).replace(/\s/g, "");
-    if (!email || !/^\d{6}$/.test(code)) {
-      return reponseErreur(res, "Saisissez le code à 6 chiffres reçu par e-mail.");
-    }
-
-    const ligne = await derniereVerification(email);
-    if (!ligne) return reponseErreur(res, "Aucun code en attente pour cette adresse. Demandez un nouveau code.");
-    if (new Date(ligne.expire_le) < new Date()) return reponseErreur(res, "Ce code a expiré. Demandez un nouveau code.");
-    if (ligne.tentatives >= TENTATIVES_MAX) return reponseErreur(res, "Trop de tentatives. Demandez un nouveau code.");
-
-    const attendu = Buffer.from(ligne.code_hash, "hex");
-    const recu = Buffer.from(hacherCode(code), "hex");
-    const correct = attendu.length === recu.length && crypto.timingSafeEqual(attendu, recu);
-
-    if (!correct) {
-      await supabase.from("rf_verifications_email")
-        .update({ tentatives: ligne.tentatives + 1 }).eq("id", ligne.id);
-      const restantes = TENTATIVES_MAX - (ligne.tentatives + 1);
-      return reponseErreur(res, restantes > 0
-        ? `Code incorrect. Il vous reste ${restantes} tentative(s).`
-        : "Code incorrect. Demandez un nouveau code.");
-    }
-
-    const { data: compte, error: e1 } = await supabase
-      .from("comptes_membres").update({ compte_verifie: true })
-      .eq("id", ligne.compte_id).select().single();
-    if (e1) throw e1;
-
-    const { data: membre, error: e2 } = await supabase
-      .from("membres").select("*").eq("id", compte.membre_id).single();
-    if (e2) throw e2;
-
-    if (!membre.email) {
-      await supabase.from("membres").update({ email }).eq("id", membre.id);
-      membre.email = email;
-    }
-
-    await supabase.from("rf_verifications_email").delete().eq("compte_id", ligne.compte_id);
-
-    const role = await determinerRoleMembre(membre);
-    await ouvrirSessionMembre(req, res, membre, compte, role);
-
-    res.json({ succes: true, message: "Adresse e-mail confirmée. Bienvenue !", role });
-  } catch (erreur) {
-    console.error(erreur);
-    reponseErreur(res, "La vérification a échoué.", 500);
-  }
-});
-
-app.post("/api/auth/renvoyer-code", limiteConnexion, async (req, res) => {
-  try {
-    const email = normaliserEmail(req.body.email);
-    if (!email || !emailValide(email)) return reponseErreur(res, "Adresse e-mail invalide.");
-
-    const neutre = () => res.json({
-      succes: true,
-      message: "Si un compte est en attente pour cette adresse, un nouveau code vient d'être envoyé."
-    });
-
-    const ligne = await derniereVerification(email);
-    if (!ligne) return neutre();
-
-    const { data: compte } = await supabase
-      .from("comptes_membres").select("id, compte_verifie").eq("id", ligne.compte_id).maybeSingle();
-    if (!compte || compte.compte_verifie === true) return neutre();
-
-    if (Date.now() - new Date(ligne.created_at).getTime() < 60000) {
-      return reponseErreur(res, "Patientez une minute avant de demander un nouveau code.", 429);
-    }
-
-    await creerEtEnvoyerCode(compte.id, email);
-    neutre();
-  } catch (erreur) {
-    console.error(erreur);
-    reponseErreur(res, "Impossible d'envoyer le code pour le moment.", 500);
   }
 });
 

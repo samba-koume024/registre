@@ -208,19 +208,6 @@
         <div id="message" class="message" role="alert"></div>
       </form>
 
-      <form id="form-verification" hidden>
-        <p id="texte-verification" class="description"></p>
-
-        <label for="code">Code de vérification (6 chiffres)</label>
-        <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code"
-               maxlength="6" pattern="[0-9]{6}" placeholder="123456" required>
-
-        <button type="submit" id="bouton-verification">Confirmer mon adresse e-mail</button>
-        <button type="button" id="bouton-renvoi">Renvoyer le code</button>
-
-        <div id="message-verification" class="message" role="alert"></div>
-      </form>
-
       <p class="note">
         Vous devez déjà être enregistré dans le Registre Fogny.
         Renseignez votre adresse e-mail (obligatoire) : un code de vérification vous y sera envoyé. Si votre fiche membre n'a pas encore d'e-mail, indiquez aussi votre téléphone tel qu'il figure sur votre fiche.
@@ -295,11 +282,6 @@
           return;
         }
 
-        if (resultat.verification_requise) {
-          afficherVerification(resultat.email, resultat.message);
-          return;
-        }
-
         afficherMessage(
           resultat.message + " Vous allez être redirigé...",
           "succes"
@@ -325,81 +307,13 @@
       }
     });
 
-    // ---------- Confirmation de l'adresse e-mail ----------
-    const formVerification = document.getElementById("form-verification");
-    const messageVerif = document.getElementById("message-verification");
-    let emailEnAttente = "";
-
-    function afficherMessageVerif(texte, type) {
-      messageVerif.textContent = texte;
-      messageVerif.className = "message " + type;
-    }
-
-    function afficherVerification(email, texte) {
-      emailEnAttente = email;
-      formulaire.hidden = true;
-      formVerification.hidden = false;
-      document.getElementById("texte-verification").textContent =
-        texte || "Saisissez le code reçu par e-mail.";
-      document.getElementById("code").focus();
-    }
-
-    formVerification.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const code = document.getElementById("code").value.trim();
-      const b = document.getElementById("bouton-verification");
-      b.disabled = true;
-      try {
-        const reponse = await fetch("/api/auth/verifier-email", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: emailEnAttente, code })
-        });
-        const resultat = await reponse.json();
-        if (!reponse.ok || !resultat.succes) {
-          afficherMessageVerif(resultat.message || "Code incorrect.", "erreur");
-          return;
-        }
-        afficherMessageVerif(resultat.message, "succes");
-        setTimeout(() => { window.location.href = "/"; }, 1000);
-      } catch (e) {
-        afficherMessageVerif("Impossible de contacter le serveur. Réessayez.", "erreur");
-      } finally {
-        b.disabled = false;
-      }
-    });
-
-    document.getElementById("bouton-renvoi").addEventListener("click", async () => {
-      try {
-        const reponse = await fetch("/api/auth/renvoyer-code", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: emailEnAttente })
-        });
-        const resultat = await reponse.json();
-        afficherMessageVerif(resultat.message || "Erreur.", reponse.ok ? "succes" : "erreur");
-      } catch (e) {
-        afficherMessageVerif("Impossible de contacter le serveur. Réessayez.", "erreur");
-      }
-    });
-
-    // Arrivée depuis la page de connexion avec un compte non confirmé
-    const parametres = new URLSearchParams(window.location.search);
-    if (!parametres.has("verifier")) {
-      formulaire.hidden = true;
-      const avis = document.createElement("p");
-      avis.className = "description";
-      avis.innerHTML = "La création de compte est réservée à l'administrateur.<br>" +
-        "Contactez-le pour obtenir votre accès, puis <a href=\"/connexion.html\">connectez-vous</a>.";
-      formulaire.parentNode.insertBefore(avis, formulaire);
-    }
-
-    if (parametres.has("verifier")) {
-      afficherVerification(
-        parametres.get("verifier"),
-        "Votre adresse e-mail n'est pas encore confirmée. Saisissez le code reçu, ou demandez-en un nouveau."
-      );
-    }
+    // La création de compte est réservée à l'administrateur
+    formulaire.hidden = true;
+    const avis = document.createElement("p");
+    avis.className = "description";
+    avis.innerHTML = "La création de compte est réservée à l'administrateur.<br>" +
+      "Contactez-le pour obtenir votre accès, puis <a href=\"/connexion.html\">connectez-vous</a>.";
+    formulaire.parentNode.insertBefore(avis, formulaire);
   </script>
 </body>
 </html>

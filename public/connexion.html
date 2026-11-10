@@ -240,12 +240,6 @@
 
         resultat = await reponse.json();
 
-        if (resultat.verification_requise) {
-          window.location.href = "/inscription.html?verifier=" +
-            encodeURIComponent(resultat.email || "");
-          return;
-        }
-
         if (!reponse.ok || !resultat.succes) {
           afficherMessage(
             resultat.message || "Identifiant ou mot de passe incorrect.",
