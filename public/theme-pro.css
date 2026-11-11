@@ -708,3 +708,9 @@ body .main-content button.pt-activite.cr-actif {
 body .main-content button.pt-activite.cr-actif small,
 body .main-content button.pt-activite.cr-actif .pt-go { color: #fff; }
 body .cr-note { width: 110px !important; min-width: 0 !important; }
+
+/* Feuille de notes d'un niveau */
+body .cr-resume { padding: 12px 16px; border-radius: var(--rayon); background: var(--c-50); border: 1px solid var(--c-100); }
+body .cr-feuille tfoot td { background: #eceff1; font-weight: 700; }
+body .main-content button.cr-petit { padding: 0 6px; margin-left: 6px; font-size: 12px; color: var(--danger); border-color: #f0c4c0; }
+body .cr-feuille .cr-note { width: 90px !important; min-width: 0 !important; }

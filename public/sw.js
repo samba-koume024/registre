@@ -1,6 +1,6 @@
 // Registre Fogny : service worker (installation + mode hors ligne)
 // Changer le numéro de version ci-dessous force la mise à jour des fichiers en cache.
-const VERSION = "fogny-v7";
+const VERSION = "fogny-v8";
 const FICHIERS = [
     "/style.css", "/theme-pro.css", "/police.css", "/app.js", "/acces.js", "/pointages.js", "/supervisions.js",
     "/rapports.js", "/reunions.js", "/categories.js", "/programme-categories.js",
@@ -74,14 +74,15 @@ self.addEventListener("fetch", evenement => {
         return;
     }
 
-    // Fichiers de l'application : version en cache, mise à jour en arrière-plan
+    // Fichiers de l'application : dernière version en ligne, copie en cache hors ligne
     evenement.respondWith((async () => {
         const cache = await caches.open(VERSION);
-        const enCache = await cache.match(requete);
-        const reseau = fetch(requete).then(r => {
-            if (r.ok) cache.put(requete, r.clone());
-            return r;
-        }).catch(() => null);
-        return enCache || (await reseau) || Response.error();
+        try {
+            const reponse = await fetch(requete);
+            if (reponse.ok) cache.put(requete, reponse.clone());
+            return reponse;
+        } catch (e) {
+            return (await cache.match(requete)) || Response.error();
+        }
     })());
 });

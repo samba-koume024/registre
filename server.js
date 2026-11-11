@@ -3595,7 +3595,13 @@ app.get("/api/evaluations", exigerUneDes(LIRE_COURS), async (req, res) => {
       succes: true,
       evaluations: evaluations.map(e => {
         const valeurs = notes.filter(n => n.evaluation_id === e.id).map(n => Number(n.note));
-        return { ...e, nb_notes: valeurs.length, ...statsNotes(valeurs) };
+        return {
+          ...e,
+          nb_notes: valeurs.length,
+          ...statsNotes(valeurs),
+          notes: notes.filter(n => n.evaluation_id === e.id)
+            .map(n => ({ membre_id: n.membre_id, note: Number(n.note) }))
+        };
       })
     });
   } catch (erreur) {
@@ -3751,7 +3757,14 @@ app.get("/api/cours-rapport", exigerUneDes([...LIRE_COURS, "rapports.voir"]), as
           const base = c.presents + c.absents;
           const evalsNiveau = (evals || []).filter(e => e.niveau === n.nom);
           const idsNiveau = new Set(evalsNiveau.map(e => e.id));
-          const valeurs = notes.filter(x => idsNiveau.has(x.evaluation_id)).map(x => Number(x.note));
+          // Moyenne de chaque élève, puis moyenne du niveau = moyenne de ces moyennes
+          const parEleve = new Map();
+          notes.filter(x => idsNiveau.has(x.evaluation_id)).forEach(x => {
+            const cle = String(x.membre_id);
+            if (!parEleve.has(cle)) parEleve.set(cle, []);
+            parEleve.get(cle).push(Number(x.note));
+          });
+          const valeurs = [...parEleve.values()].map(v => v.reduce((t, a) => t + a, 0) / v.length);
           return {
             niveau: n.nom,
             effectif: effectifs[n.nom] || 0,

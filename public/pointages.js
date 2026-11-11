@@ -34,6 +34,15 @@
 
     const heure = h => (h ? String(h).slice(0, 5) : "");
 
+    // Statut par défaut choisi pour les membres pas encore pointés (gardé sur l'appareil)
+    function lireDefaut() {
+        try { return localStorage.getItem("pt_defaut") === "Présent" ? "Présent" : "Absent"; }
+        catch (e) { return "Absent"; }
+    }
+    function ecrireDefaut(valeur) {
+        try { localStorage.setItem("pt_defaut", valeur); } catch (e) { /* ignoré */ }
+    }
+
     // Envoie, ou garde sur l'appareil si la connexion est absente
     async function envoyer(url, corps, succes) {
         try {
@@ -128,12 +137,13 @@
             const concernes = window.membresConcernes(membres, codes, bureauIds);
             const libelles = window.CATEGORIES_FOGNY.filter(c => codes.includes(c.code)).map(c => c.libelle);
 
+            const defautStatut = lireDefaut();
             const lignes = concernes.map(m => {
                 const p = deja.get(String(m.id));
-                return `<tr data-membre="${esc(m.id)}" data-niveau="${esc(window.niveauDe(m))}">
+                return `<tr data-membre="${esc(m.id)}" data-niveau="${esc(window.niveauDe(m))}" data-enregistre="${p ? 1 : 0}">
                     <td>${esc(m.prenom)} ${esc(m.nom)}</td>
                     <td><select class="pt-statut">
-                        ${STATUTS.map(s => `<option ${(p ? (p.statut === "Retard" ? "Présent" : p.statut === "Excusé" ? "Absent" : p.statut) : "Absent") === s ? "selected" : ""}>${s}</option>`).join("")}
+                        ${STATUTS.map(s => `<option ${(p ? (p.statut === "Retard" ? "Présent" : p.statut === "Excusé" ? "Absent" : p.statut) : defautStatut) === s ? "selected" : ""}>${s}</option>`).join("")}
                     </select></td>
                     <td><input type="text" class="pt-obs" value="${esc(p ? p.observation : "")}" placeholder="Observation"></td>
                 </tr>`;
@@ -164,7 +174,14 @@
                 <p>${programmeCourant ? `<strong>${esc(programmeCourant.activite)}</strong> · ` : ""}${
                     libelles.length ? "Catégories concernées : " + esc(libelles.join(", ")) + " · " : ""}<strong>${concernes.length}</strong> membre(s) à pointer.</p>
                 <p><strong>${d.pointages.length}</strong> pointage(s) déjà enregistré(s) pour cette date.
-                <button type="button" id="pt-tous-presents">Tous présents</button></p>
+                <button type="button" id="pt-tous-presents">Tous présents</button>
+                <button type="button" id="pt-tous-absents">Tous absents</button></p>
+                <p><label for="pt-defaut">Statut par défaut</label>
+                <select id="pt-defaut">
+                    <option value="Absent" ${defautStatut === "Absent" ? "selected" : ""}>Tout le monde absent</option>
+                    <option value="Présent" ${defautStatut === "Présent" ? "selected" : ""}>Tout le monde présent</option>
+                </select>
+                <small>S'applique aux membres pas encore pointés.</small></p>
                 ${estCours ? `<p><label for="pt-niveau">Niveau</label>
                     <select id="pt-niveau"><option value="">Tous les niveaux</option>
                     ${window.NIVEAUX_FOGNY.map(n => `<option value="${esc(n.nom)}">${esc(n.nom)}</option>`).join("")}</select></p>` : ""}
@@ -189,11 +206,12 @@
             const normaliser = t => String(t).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
             const filtrer = () => {
                 const motif = normaliser(document.getElementById("pt-recherche").value.trim());
+                const mots = motif.split(/\s+/).filter(Boolean);
                 const selection = document.getElementById("pt-niveau");
                 const niveau = selection ? selection.value : "";
                 cible.querySelectorAll("tbody tr[data-membre]").forEach(tr => {
                     const nom = normaliser(tr.children[0].textContent);
-                    const visible = (!motif || nom.includes(motif)) && (!niveau || tr.dataset.niveau === niveau);
+                    const visible = mots.every(mot => nom.includes(mot)) && (!niveau || tr.dataset.niveau === niveau);
                     tr.style.display = visible ? "" : "none";
                 });
             };
@@ -202,6 +220,16 @@
             if (choixNiveau) choixNiveau.addEventListener("change", filtrer);
             document.getElementById("pt-tous-presents").onclick = () => {
                 cible.querySelectorAll(".pt-statut").forEach(s => s.value = "Présent");
+                resume();
+            };
+            document.getElementById("pt-tous-absents").onclick = () => {
+                cible.querySelectorAll(".pt-statut").forEach(s => s.value = "Absent");
+                resume();
+            };
+            document.getElementById("pt-defaut").onchange = e => {
+                ecrireDefaut(e.target.value);
+                cible.querySelectorAll('tr[data-membre][data-enregistre="0"] .pt-statut')
+                    .forEach(s => s.value = e.target.value);
                 resume();
             };
             document.getElementById("pt-enregistrer").onclick = async () => {
