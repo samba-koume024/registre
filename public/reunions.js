@@ -229,7 +229,7 @@
             @page { margin: 16mm; }
             body{font-family:'Book Antiqua','Palatino Linotype',Palatino,Georgia,serif;margin:0;color:#111}
             .entete{text-align:center;margin-bottom:22px}
-            .logo{display:block;margin:0 auto 4px;width:28mm;height:auto}
+            .logo{display:block;margin:0 auto 6px;height:36mm;width:auto}
             .entete-ligne{line-height:1.15}
             .edwardian{font-family:'Edwardian Script ITC','Monotype Corsiva','Segoe Script',cursive;font-size:14pt}
             .brush{font-family:'Brush Script MT','Brush Script Std','Segoe Script',cursive;font-size:13pt}
