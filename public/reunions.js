@@ -172,15 +172,40 @@
     }
 
     // ---------- Impression ----------
-    function imprimer(type) {
+    // Charge le logo et le transforme en image intégrée au document (plus sûr à l'impression)
+    async function logoEnImage(chemin) {
+        const reponse = await fetch(chemin, { cache: "no-cache" });
+        if (!reponse.ok) throw new Error("introuvable");
+        const blob = await reponse.blob();
+        return new Promise((ok, ko) => {
+            const lecteur = new FileReader();
+            lecteur.onload = () => ok(lecteur.result);
+            lecteur.onerror = ko;
+            lecteur.readAsDataURL(blob);
+        });
+    }
+
+    async function imprimer(type) {
         const f = lireFiche();
         if (!f.titre || !f.date_reunion) return alert("Renseignez au moins le titre et la date.");
+        // La fenêtre s'ouvre tout de suite (sinon le navigateur la bloque après une attente)
+        const fenetre = window.open("", "_blank");
+        if (!fenetre) return alert("Autorisez les fenêtres pop-up pour imprimer.");
+        fenetre.document.title = "Préparation du document...";
         const noms = f.participants.map(p => {
             const m = membres.find(x => String(x.id) === p.membre_id);
             return { nom: m ? `${m.prenom} ${m.nom}` : "?", presence: p.presence };
         });
         const cfg = window.ENTETE_FOGNY || {};
-        const logo = cfg.logo ? `<img class="logo" src="${location.origin}${cfg.logo}" alt="Logo">` : "";
+        let logoSrc = "";
+        if (cfg.logo) {
+            try {
+                logoSrc = await logoEnImage(cfg.logo);
+            } catch (e) {
+                alert("Le logo « " + cfg.logo + " » est introuvable. Vérifiez que le fichier existe dans le dossier public du projet.");
+            }
+        }
+        const logo = logoSrc ? `<img class="logo" src="${logoSrc}" alt="Logo">` : "";
         const enteteInstitution = `<div class="entete">
             ${logo}
             ${(cfg.lignes || []).map(l =>
@@ -199,8 +224,6 @@
                <h3>Ordre du jour</h3><p style="white-space:pre-wrap">${esc(f.ordre_du_jour) || "—"}</p>
                <h3>Compte rendu</h3><p style="white-space:pre-wrap">${esc(f.proces_verbal) || "—"}</p>${pied}`;
 
-        const fenetre = window.open("", "_blank");
-        if (!fenetre) return alert("Autorisez les fenêtres pop-up pour imprimer.");
         fenetre.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
             <title>${esc(f.titre)}</title><style>
             @page { margin: 16mm; }
