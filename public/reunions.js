@@ -194,8 +194,12 @@
         fenetre.document.title = "Préparation du document...";
         const noms = f.participants.map(p => {
             const m = membres.find(x => String(x.id) === p.membre_id);
-            return { nom: m ? `${m.prenom} ${m.nom}` : "?", presence: p.presence };
+            return { prenom: m ? m.prenom : "?", nom: m ? m.nom : "", presence: p.presence };
         });
+        const presents = noms
+            .filter(n => n.presence === "Présent")
+            .sort((a, b) => `${a.prenom} ${a.nom}`.localeCompare(`${b.prenom} ${b.nom}`, "fr"));
+
         const cfg = window.ENTETE_FOGNY || {};
         let logoSrc = "";
         if (cfg.logo) {
@@ -216,11 +220,14 @@
             <p>${dateFr(f.date_reunion)}${f.heure ? " à " + esc(f.heure) : ""}${f.lieu ? " · " + esc(f.lieu) : ""}</p>`;
         const corps = type === "convocation"
             ? `${entete}<h3>Convocation</h3><p>Les personnes suivantes sont convoquées :</p>
-               <ul>${noms.map(n => `<li>${esc(n.nom)}</li>`).join("")}</ul>
+               <ul>${noms.map(n => `<li>${esc(n.prenom)} ${esc(n.nom)}</li>`).join("")}</ul>
                <h3>Ordre du jour</h3><p style="white-space:pre-wrap">${esc(f.ordre_du_jour) || "—"}</p>${pied}`
             : `${entete}<h3>Procès-verbal</h3>
-               <table><thead><tr><th>Participant</th><th>Présence</th></tr></thead><tbody>
-               ${noms.map(n => `<tr><td>${esc(n.nom)}</td><td>${esc(n.presence)}</td></tr>`).join("")}</tbody></table>
+               <h3>Liste des présences</h3>
+               <p>Nombre de présents : <strong>${presents.length}</strong></p>
+               <table><thead><tr><th>N°</th><th>Prénom</th><th>Nom</th></tr></thead><tbody>
+               ${presents.map((n, i) => `<tr><td>${i + 1}</td><td>${esc(n.prenom)}</td><td>${esc(n.nom)}</td></tr>`).join("")
+                   || '<tr><td colspan="3">Aucun membre présent enregistré.</td></tr>'}</tbody></table>
                <h3>Ordre du jour</h3><p style="white-space:pre-wrap">${esc(f.ordre_du_jour) || "—"}</p>
                <h3>Compte rendu</h3><p style="white-space:pre-wrap">${esc(f.proces_verbal) || "—"}</p>${pied}`;
 
