@@ -1,10 +1,10 @@
 // Registre Fogny : service worker (installation + mode hors ligne)
 // Changer le numéro de version ci-dessous force la mise à jour des fichiers en cache.
-const VERSION = "fogny-v8";
+const VERSION = "fogny-v10";
 const FICHIERS = [
     "/style.css", "/theme-pro.css", "/police.css", "/app.js", "/acces.js", "/pointages.js", "/supervisions.js",
     "/rapports.js", "/reunions.js", "/categories.js", "/programme-categories.js",
-    "/membres-liste.js", "/niveaux.js", "/cours.js", "/membres-import.js", "/comptes.js", "/droits.js", "/profil.js", "/pwa.js", "/manifest.webmanifest",
+    "/membres-liste.js", "/entete.js", "/logo.jpg", "/niveaux.js", "/cours.js", "/membres-import.js", "/comptes.js", "/droits.js", "/profil.js", "/pwa.js", "/manifest.webmanifest",
     "/icons/icon-192.png", "/icons/icon-512.png"
 ];
 const BIBLIOTHEQUES = [

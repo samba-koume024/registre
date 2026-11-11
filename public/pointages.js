@@ -5,7 +5,7 @@
     const STATUTS = ["Présent", "Absent"];
     const zone = () => document.getElementById("pointages-contenu");
     const JOURS = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
-    let membres = [], programme = [], activitesAffichees = [], categoriesProgramme = {}, bureauIds = [], programmeCourant = null, coursIds = new Set();
+    let membres = [], programme = [], activitesAffichees = [], categoriesProgramme = {}, bureauIds = [], programmeCourant = null, coursIds = new Set(), groupe = lireGroupe();
 
     const esc = t => String(t ?? "").replace(/[&<>"']/g, c =>
         ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -41,6 +41,17 @@
     }
     function ecrireDefaut(valeur) {
         try { localStorage.setItem("pt_defaut", valeur); } catch (e) { /* ignoré */ }
+    }
+
+    // Groupe pointé par cette personne : "" (tous), "Féminin" ou "Masculin"
+    function lireGroupe() {
+        try {
+            const g = localStorage.getItem("pt_groupe");
+            return g === "Féminin" || g === "Masculin" ? g : "";
+        } catch (e) { return ""; }
+    }
+    function ecrireGroupe(valeur) {
+        try { localStorage.setItem("pt_groupe", valeur); } catch (e) { /* ignoré */ }
     }
 
     // Envoie, ou garde sur l'appareil si la connexion est absente
@@ -134,18 +145,19 @@
 
             const estCours = Boolean(programmeCourant) && coursIds.has(String(programmeCourant.id));
             const codes = programmeCourant ? (categoriesProgramme[String(programmeCourant.id)] || []) : [];
-            const concernes = window.membresConcernes(membres, codes, bureauIds);
+            const concernes = window.membresConcernes(membres, codes, bureauIds).filter(m => !groupe || m.sexe === groupe);
             const libelles = window.CATEGORIES_FOGNY.filter(c => codes.includes(c.code)).map(c => c.libelle);
 
             const defautStatut = lireDefaut();
             const lignes = concernes.map(m => {
                 const p = deja.get(String(m.id));
+                const statut = p ? (p.statut === "Retard" ? "Présent" : p.statut === "Excusé" ? "Absent" : p.statut) : defautStatut;
                 return `<tr data-membre="${esc(m.id)}" data-niveau="${esc(window.niveauDe(m))}" data-enregistre="${p ? 1 : 0}">
                     <td>${esc(m.prenom)} ${esc(m.nom)}</td>
-                    <td><select class="pt-statut">
-                        ${STATUTS.map(s => `<option ${(p ? (p.statut === "Retard" ? "Présent" : p.statut === "Excusé" ? "Absent" : p.statut) : defautStatut) === s ? "selected" : ""}>${s}</option>`).join("")}
-                    </select></td>
-                    <td><input type="text" class="pt-obs" value="${esc(p ? p.observation : "")}" placeholder="Observation"></td>
+                    <td><div class="pt-choix">
+                        <label class="pt-opt pt-opt-present"><input type="radio" class="pt-statut" name="st-${esc(m.id)}" value="Présent" ${statut === "Présent" ? "checked" : ""}><span>Présent</span></label>
+                        <label class="pt-opt pt-opt-absent"><input type="radio" class="pt-statut" name="st-${esc(m.id)}" value="Absent" ${statut === "Absent" ? "checked" : ""}><span>Absent</span></label>
+                    </div></td>
                 </tr>`;
             }).join("");
 
@@ -173,7 +185,14 @@
             cible.innerHTML = `${entete}
                 <p>${programmeCourant ? `<strong>${esc(programmeCourant.activite)}</strong> · ` : ""}${
                     libelles.length ? "Catégories concernées : " + esc(libelles.join(", ")) + " · " : ""}<strong>${concernes.length}</strong> membre(s) à pointer.</p>
-                <p><strong>${d.pointages.length}</strong> pointage(s) déjà enregistré(s) pour cette date.
+                <p><label for="pt-groupe">Je pointe</label>
+                <select id="pt-groupe">
+                    <option value="" ${groupe === "" ? "selected" : ""}>Tous les membres</option>
+                    <option value="Féminin" ${groupe === "Féminin" ? "selected" : ""}>Les femmes</option>
+                    <option value="Masculin" ${groupe === "Masculin" ? "selected" : ""}>Les hommes</option>
+                </select>
+                <small>Deux personnes peuvent pointer en même temps : l'une les femmes, l'autre les hommes.</small></p>
+                <p><strong>${concernes.filter(m => deja.has(String(m.id))).length}</strong> pointage(s) déjà enregistré(s) dans ce groupe.
                 <button type="button" id="pt-tous-presents">Tous présents</button>
                 <button type="button" id="pt-tous-absents">Tous absents</button></p>
                 <p><label for="pt-defaut">Statut par défaut</label>
@@ -187,8 +206,8 @@
                     ${window.NIVEAUX_FOGNY.map(n => `<option value="${esc(n.nom)}">${esc(n.nom)}</option>`).join("")}</select></p>` : ""}
                 <p><input type="search" id="pt-recherche" placeholder="Rechercher un membre..." aria-label="Rechercher un membre"></p>
                 <div class="table-container"><table>
-                    <thead><tr><th>Membre</th><th>Statut</th><th>Observation</th></tr></thead>
-                    <tbody>${lignes || '<tr><td colspan="3">Aucun membre dans les catégories concernées.</td></tr>'}</tbody>
+                    <thead><tr><th>Membre</th><th>Pointage</th></tr></thead>
+                    <tbody>${lignes || '<tr><td colspan="2">Aucun membre à pointer dans ce groupe.</td></tr>'}</tbody>
                 </table></div>
                 <p id="pt-resume"></p>
                 <button type="button" class="primary-button" id="pt-enregistrer">Enregistrer l'appel</button>
@@ -196,11 +215,18 @@
 
             const resume = () => {
                 const total = {};
-                cible.querySelectorAll(".pt-statut").forEach(s => total[s.value] = (total[s.value] || 0) + 1);
+                cible.querySelectorAll(".pt-statut:checked").forEach(s => total[s.value] = (total[s.value] || 0) + 1);
                 document.getElementById("pt-resume").textContent =
                     STATUTS.map(s => `${s} : ${total[s] || 0}`).join(" · ");
             };
             cible.querySelectorAll(".pt-statut").forEach(s => s.onchange = resume);
+            const definir = (tr, statut) =>
+                tr.querySelectorAll(".pt-statut").forEach(r => { r.checked = r.value === statut; });
+            document.getElementById("pt-groupe").onchange = e => {
+                groupe = e.target.value;
+                ecrireGroupe(groupe);
+                chargerAppel();
+            };
 
             // Recherche : masque les lignes sans les retirer (les statuts restent enregistrés)
             const normaliser = t => String(t).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -219,24 +245,23 @@
             const choixNiveau = document.getElementById("pt-niveau");
             if (choixNiveau) choixNiveau.addEventListener("change", filtrer);
             document.getElementById("pt-tous-presents").onclick = () => {
-                cible.querySelectorAll(".pt-statut").forEach(s => s.value = "Présent");
+                cible.querySelectorAll("tbody tr[data-membre]").forEach(tr => definir(tr, "Présent"));
                 resume();
             };
             document.getElementById("pt-tous-absents").onclick = () => {
-                cible.querySelectorAll(".pt-statut").forEach(s => s.value = "Absent");
+                cible.querySelectorAll("tbody tr[data-membre]").forEach(tr => definir(tr, "Absent"));
                 resume();
             };
             document.getElementById("pt-defaut").onchange = e => {
                 ecrireDefaut(e.target.value);
-                cible.querySelectorAll('tr[data-membre][data-enregistre="0"] .pt-statut')
-                    .forEach(s => s.value = e.target.value);
+                cible.querySelectorAll('tr[data-membre][data-enregistre="0"]')
+                    .forEach(tr => definir(tr, e.target.value));
                 resume();
             };
             document.getElementById("pt-enregistrer").onclick = async () => {
                 const lignesAppel = [...cible.querySelectorAll("tbody tr[data-membre]")].map(tr => ({
                     membre_id: tr.dataset.membre,
-                    statut: tr.querySelector(".pt-statut").value,
-                    observation: tr.querySelector(".pt-obs").value.trim()
+                    statut: (tr.querySelector(".pt-statut:checked") || {}).value || "Absent"
                 }));
                 const ok = await envoyer("/api/pointages",
                     { date, activite, pointages: lignesAppel }, "Appel enregistré.");

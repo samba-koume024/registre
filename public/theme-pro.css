@@ -714,3 +714,24 @@ body .cr-resume { padding: 12px 16px; border-radius: var(--rayon); background: v
 body .cr-feuille tfoot td { background: #eceff1; font-weight: 700; }
 body .main-content button.cr-petit { padding: 0 6px; margin-left: 6px; font-size: 12px; color: var(--danger); border-color: #f0c4c0; }
 body .cr-feuille .cr-note { width: 90px !important; min-width: 0 !important; }
+
+/* Pointage : Présent | Absent côte à côte */
+body .pt-choix { display: inline-flex; border: 1px solid #cbd5e1; border-radius: 10px; overflow: hidden; }
+body .pt-opt { margin: 0; cursor: pointer; }
+body .pt-opt input { position: absolute; opacity: 0; pointer-events: none; }
+body .pt-opt span {
+    display: block; padding: 8px 18px; min-width: 88px; text-align: center;
+    font-weight: 600; font-size: 14px; background: #fff; color: #64748b; transition: background .12s ease, color .12s ease;
+}
+body .pt-opt + .pt-opt span { border-left: 1px solid #cbd5e1; }
+body .pt-opt-present input:checked + span { background: #16a34a; color: #fff; }
+body .pt-opt-absent input:checked + span { background: #dc2626; color: #fff; }
+body .pt-opt input:focus-visible + span { outline: 3px solid rgba(37, 99, 235, .45); outline-offset: -3px; }
+
+/* Rapports : choix des activités */
+body .rp-activites { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; margin: 8px 0 14px; }
+body .main-content label.rp-activite {
+    display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; margin: 0;
+    border: 1px solid var(--bord); border-radius: 10px; background: #fff; font-weight: 400; cursor: pointer;
+}
+body .rp-activite small { color: var(--gris); }

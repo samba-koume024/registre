@@ -179,28 +179,63 @@
             const m = membres.find(x => String(x.id) === p.membre_id);
             return { nom: m ? `${m.prenom} ${m.nom}` : "?", presence: p.presence };
         });
-        const entete = `<h1>Registre Fogny</h1><h2>${esc(f.titre)}</h2>
+        const cfg = window.ENTETE_FOGNY || {};
+        const logo = cfg.logo ? `<img class="logo" src="${location.origin}${cfg.logo}" alt="Logo">` : "";
+        const enteteInstitution = `<div class="entete">
+            ${logo}
+            ${(cfg.lignes || []).map(l =>
+                `<div class="entete-ligne ${l.police === "edwardian" ? "edwardian" : "brush"}">${esc(l.texte)}</div>`).join("")}
+        </div>`;
+        const pied = cfg.pied ? `<div class="pied">${esc(cfg.pied)}</div>` : "";
+        const entete = `${enteteInstitution}<h2>${esc(f.titre)}</h2>
             <p>${dateFr(f.date_reunion)}${f.heure ? " à " + esc(f.heure) : ""}${f.lieu ? " · " + esc(f.lieu) : ""}</p>`;
         const corps = type === "convocation"
             ? `${entete}<h3>Convocation</h3><p>Les personnes suivantes sont convoquées :</p>
                <ul>${noms.map(n => `<li>${esc(n.nom)}</li>`).join("")}</ul>
-               <h3>Ordre du jour</h3><p style="white-space:pre-wrap">${esc(f.ordre_du_jour) || "—"}</p>`
+               <h3>Ordre du jour</h3><p style="white-space:pre-wrap">${esc(f.ordre_du_jour) || "—"}</p>${pied}`
             : `${entete}<h3>Procès-verbal</h3>
                <table><thead><tr><th>Participant</th><th>Présence</th></tr></thead><tbody>
                ${noms.map(n => `<tr><td>${esc(n.nom)}</td><td>${esc(n.presence)}</td></tr>`).join("")}</tbody></table>
                <h3>Ordre du jour</h3><p style="white-space:pre-wrap">${esc(f.ordre_du_jour) || "—"}</p>
-               <h3>Compte rendu</h3><p style="white-space:pre-wrap">${esc(f.proces_verbal) || "—"}</p>`;
+               <h3>Compte rendu</h3><p style="white-space:pre-wrap">${esc(f.proces_verbal) || "—"}</p>${pied}`;
 
         const fenetre = window.open("", "_blank");
         if (!fenetre) return alert("Autorisez les fenêtres pop-up pour imprimer.");
         fenetre.document.write(`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
             <title>${esc(f.titre)}</title><style>
-            body{font-family:\"Book Antiqua\",\"Palatino Linotype\",Palatino,Georgia,serif;margin:30px;color:#111}h1{color:#1e40af}
+            @page { margin: 16mm; }
+            body{font-family:'Book Antiqua','Palatino Linotype',Palatino,Georgia,serif;margin:0;color:#111}
+            .entete{text-align:center;margin-bottom:22px}
+            .logo{display:block;margin:0 auto 4px;width:28mm;height:auto}
+            .entete-ligne{line-height:1.15}
+            .edwardian{font-family:'Edwardian Script ITC','Monotype Corsiva','Segoe Script',cursive;font-size:14pt}
+            .brush{font-family:'Brush Script MT','Brush Script Std','Segoe Script',cursive;font-size:13pt}
+            h2{font-family:'Bodoni MT','Bodoni MT Bold',Didot,'Times New Roman',serif;font-weight:bold;
+               font-size:16pt;text-align:center;text-transform:uppercase;text-decoration:underline;margin:22px 0 4px}
+            h2+p{text-align:center;margin-top:0}
+            h3{color:#1e40af;border-bottom:1px solid #c7d2fe;padding-bottom:3px}
             table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:6px 8px;text-align:left}
-            th{background:#e3ecfb}</style></head><body>${corps}</body></html>`);
+            th{background:#e3ecfb}
+            .pied{margin-top:28px;padding-top:8px;border-top:1px solid #999;text-align:center;font-size:12px;color:#444}
+            </style></head><body>${corps}</body></html>`);
         fenetre.document.close();
-        fenetre.focus();
-        fenetre.print();
+
+        // On attend que le logo soit chargé avant d'ouvrir l'impression
+        let lance = false;
+        const lancer = () => {
+            if (lance) return;
+            lance = true;
+            fenetre.focus();
+            fenetre.print();
+        };
+        const image = fenetre.document.querySelector("img.logo");
+        if (image && !image.complete) {
+            image.onload = lancer;
+            image.onerror = lancer;
+            setTimeout(lancer, 2500);
+        } else {
+            setTimeout(lancer, 150);
+        }
     }
 
     // ---------- Chargement ----------

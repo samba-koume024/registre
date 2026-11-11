@@ -1096,7 +1096,7 @@ app.get("/api/status", (req, res) => {
 
 app.get(
   "/api/programme",
-  exigerUneDes(["programme.voir", "pointages.gerer", "bureau.consulter", "cours.voir", "cours.gerer"]),
+  exigerUneDes(["programme.voir", "pointages.gerer", "bureau.consulter", "cours.voir", "cours.gerer", "rapports.voir"]),
   async (req, res) => {
     try {
       const { data, error } = await supabase
@@ -3780,6 +3780,66 @@ app.get("/api/cours-rapport", exigerUneDes([...LIRE_COURS, "rapports.voir"]), as
   } catch (erreur) {
     console.error(erreur);
     reponseErreur(res, "Impossible de préparer le rapport des cours.", 500);
+  }
+});
+
+// ======================================================
+// 22 octodecies. RAPPORT PAR ACTIVITÉ (membres pointés)
+// ======================================================
+
+app.get("/api/rapport-activites", exigerUneDes(["rapports.voir", "supervisions.voir"]), async (req, res) => {
+  try {
+    const debut = nettoyerTexte(req.query.debut);
+    const fin = nettoyerTexte(req.query.fin);
+    if (!dateValide(debut) || !dateValide(fin) || debut > fin) return reponseErreur(res, "Période invalide.");
+
+    const brutes = [].concat(req.query.activite || []);
+    const noms = [...new Set(brutes.map(a => nettoyerTexte(String(a)).slice(0, 120)).filter(Boolean))];
+    if (!noms.length) return reponseErreur(res, "Choisissez au moins une activité.");
+    if (noms.length > 30) return reponseErreur(res, "Trop d'activités sélectionnées.");
+
+    const { data: membres, error: erreurMembres } = await supabase.from("membres").select("id, prenom, nom");
+    if (erreurMembres) throw erreurMembres;
+    const noms_membres = new Map((membres || []).map(m => [String(m.id), `${m.prenom} ${m.nom}`]));
+
+    const activites = [];
+    for (const nom of noms) {
+      const lignes = [];
+      for (let depart = 0; ; depart += 1000) {
+        const { data, error } = await supabase.from("rf_pointages")
+          .select("membre_id, statut, date_pointage")
+          .eq("activite", nom).gte("date_pointage", debut).lte("date_pointage", fin)
+          .range(depart, depart + 999);
+        if (error) throw error;
+        lignes.push(...(data || []));
+        if (!data || data.length < 1000) break;
+      }
+
+      const dates = new Set();
+      const parMembre = new Map();
+      for (const l of lignes) {
+        dates.add(l.date_pointage);
+        const cle = String(l.membre_id);
+        if (!parMembre.has(cle)) {
+          parMembre.set(cle, { membre_id: cle, nom: noms_membres.get(cle) || "Membre supprimé", present: 0, absent: 0 });
+        }
+        const m = parMembre.get(cle);
+        if (l.statut === "Absent") m.absent++;
+        else if (l.statut === "Présent" || l.statut === "Retard") m.present++;
+      }
+
+      activites.push({
+        activite: nom,
+        seances: dates.size,
+        membres: [...parMembre.values()]
+          .map(m => ({ ...m, taux: (m.present + m.absent) ? Math.round((m.present / (m.present + m.absent)) * 100) : null }))
+          .sort((a, b) => a.nom.localeCompare(b.nom, "fr"))
+      });
+    }
+    res.json({ succes: true, activites });
+  } catch (erreur) {
+    console.error(erreur);
+    reponseErreur(res, "Impossible de préparer le rapport des activités.", 500);
   }
 });
 
