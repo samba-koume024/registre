@@ -179,7 +179,7 @@
                                     return `${p.taux} % (${p.absents} absent(s) sur ${p.total})`;
                                 }
                             } },
-                            datalabels: { display: true, align: "top", color: "#991b1b",
+                            datalabels: { display: true, align: "top", color: window.matchMedia("(prefers-color-scheme: dark)").matches ? "#fecaca" : "#991b1b",
                                 font: { size: 11, weight: "bold" }, formatter: v => v + "%" }
                         }
                     }

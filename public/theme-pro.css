@@ -735,3 +735,127 @@ body .main-content label.rp-activite {
     border: 1px solid var(--bord); border-radius: 10px; background: #fff; font-weight: 400; cursor: pointer;
 }
 body .rp-activite small { color: var(--gris); }
+
+/* =====================================================
+   MODE SOMBRE (automatique : suit le réglage de l'appareil)
+   Les documents imprimés (procès-verbaux, rapports) restent clairs.
+   ===================================================== */
+:root { color-scheme: light dark; }
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --fond:  #0d131c;
+        --carte: #172130;
+        --bord:  #2b3b50;
+        --texte: #e5ecf4;
+        --gris:  #9db0c4;
+        --c-50:  #15243d;
+        --c-100: #1f3559;
+        --ombre-s: 0 1px 2px rgba(0, 0, 0, .45);
+        --ombre-m: 0 4px 14px rgba(0, 0, 0, .5);
+    }
+
+    html, body, body .app-layout, body .main-content { background: var(--fond) !important; color: var(--texte); }
+
+    /* Titres et textes qui étaient en bleu foncé */
+    h1, h2, h3, h4, body .topbar h1, body .section-heading h2, body .stat-card p,
+    body .content-card h3, body .form-card h3 { color: #e5ecf4; }
+    body .topbar-badge, body .pt-go, body .pt-badge, body .pt-entete strong,
+    body .eyebrow, body .topbar-label { color: #93c5fd; }
+    body .main-content label { color: #cbd7e6; }
+    body .section-description, body .stat-caption, body small { color: var(--gris); }
+
+    /* Cartes et blocs */
+    body .content-card, body .form-card, body .graphique-container, body .stats-fonctions,
+    body .stat-card, body .topbar, body .sv-courbe, body .main-content label.rp-activite,
+    body .liste-membres .content-card, body .container {
+        background: var(--carte) !important;
+        border-color: var(--bord);
+        color: var(--texte);
+    }
+    body .acces-role { background: #131d2b; }
+    body .form-card-icon { background: var(--c-100); color: #93c5fd; }
+
+    /* Champs de formulaire */
+    body .main-content input, body .main-content select, body .main-content textarea,
+    body .fiche input, body .fiche select, body .formulaire-pro input, body .formulaire-pro select,
+    body .recherche-membres input, input, select, textarea {
+        background: #0f1722 !important;
+        color: var(--texte);
+        border-color: #364a63;
+    }
+    ::placeholder { color: #6f849c; opacity: 1; }
+    body .main-content input:focus, body .main-content select:focus, body .main-content textarea:focus {
+        border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(96, 165, 250, .25);
+    }
+
+    /* Boutons */
+    body .main-content button, body .fiche button, body .main-content .secondary-button,
+    body .form-actions-pro .secondary-button {
+        background: #1d2a3b; color: #cfe0f5; border-color: #364a63;
+    }
+    body .main-content button:hover, body .fiche button:hover { background: var(--c-50); border-color: #60a5fa; }
+    body .main-content .primary-button, body .main-content .btn-primary, body .main-content .export-button,
+    body .main-content button[type="submit"], body .fiche button.primary-button {
+        background: var(--c-700); border-color: var(--c-700); color: #fff;
+    }
+    body .main-content .primary-button:hover, body .main-content .btn-primary:hover,
+    body .main-content .export-button:hover, body .main-content button[type="submit"]:hover {
+        background: var(--c-600); border-color: var(--c-600);
+    }
+    body .table-container td:last-child button:last-child:not(:only-child),
+    body .main-content button[data-suppr-role], body .main-content button[data-retirer-admin],
+    body .main-content button.cr-petit, body .fiche button.fiche-danger {
+        color: #fca5a5; border-color: #7f2d2d;
+    }
+    body .table-container td:last-child button:last-child:not(:only-child):hover,
+    body .main-content button[data-suppr-role]:hover, body .main-content button[data-retirer-admin]:hover,
+    body .fiche button.fiche-danger:hover { background: #3a1618; border-color: #f87171; }
+
+    /* Tableaux */
+    body .table-container, body .table-container table, body table { background: var(--carte) !important; color: var(--texte); }
+    body .table-container thead, body .table-container thead tr, body .table-container th,
+    body .table-container thead th, body .content-card table th {
+        background: #1f2c3f !important; color: #c7d4e3 !important; border-color: var(--bord);
+    }
+    body .table-container tbody tr, tbody tr:nth-child(even), body .liste-membres tbody tr:nth-child(even) {
+        background: var(--carte) !important;
+    }
+    body .table-container tbody td, body .content-card table td { border-bottom-color: var(--bord); color: var(--texte); }
+    body .table-container tbody tr:hover, body .liste-membres tbody tr:hover { background: #1c2c44 !important; }
+    body .cr-feuille tfoot td { background: #1f2c3f; }
+    body .badge-homme { background: #172a4a !important; color: #93c5fd !important; }
+    body .badge-femme { background: #3b1a33 !important; color: #f9a8d4 !important; }
+    body .badge-fonction, body .page-btn { background: #1f2c3f !important; color: #c7d4e3 !important; }
+    body .badge-inactif { background: #3a1618; color: #fca5a5; border-color: #7f2d2d; }
+
+    /* Pointage : Présent | Absent */
+    body .pt-choix, body .pt-opt + .pt-opt span { border-color: #364a63; }
+    body .pt-opt span { background: #1d2a3b; color: #9db0c4; }
+    body .pt-opt-present input:checked + span { background: #16a34a; color: #fff; }
+    body .pt-opt-absent input:checked + span { background: #dc2626; color: #fff; }
+    body .pt-hors-ligne { background: #3b2412; color: #fdba74; border-color: #7c4a1d; }
+    body .main-content button.pt-activite { background: #1d2a3b; color: var(--texte); }
+    body .main-content button.pt-activite.cr-actif, body .main-content .cr-onglet.cr-actif {
+        background: var(--c-700); border-color: var(--c-700); color: #fff;
+    }
+
+    /* Fiche du membre et menu du profil */
+    body .fiche { background: var(--carte); color: var(--texte); }
+    body .fiche-ligne { border-bottom-color: var(--bord); }
+    body .fiche-ligne em { color: #7d90a6; }
+    body .profil-liste { background: var(--carte); box-shadow: 0 10px 30px rgba(0, 0, 0, .6); }
+    body .profil-liste #bouton-deconnexion { color: #fca5a5; }
+    body .profil-liste #bouton-deconnexion:hover { background: #3a1618; }
+    body .fiche-fond { background: rgba(0, 0, 0, .7); }
+
+    /* Menu mobile */
+    body .bouton-menu { background: var(--carte); color: #cfe0f5; border-color: var(--bord); }
+
+    * { scrollbar-color: #3a4b61 transparent; }
+}
+
+@media print {
+    :root { color-scheme: light; }
+    html, body, body .main-content { background: #fff !important; color: #111 !important; }
+}
