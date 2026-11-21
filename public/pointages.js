@@ -57,8 +57,8 @@
     // Envoie, ou garde sur l'appareil si la connexion est absente
     async function envoyer(url, corps, succes) {
         try {
-            await api(url, "PUT", corps);
-            alert(succes);
+            const res = await api(url, "PUT", corps);
+            alert(res && res.hors_ligne ? res.message : succes);
             return true;
         } catch (e) {
             if ((e instanceof TypeError || !navigator.onLine) && window.FileAttente) {
@@ -265,7 +265,7 @@
                 }));
                 const ok = await envoyer("/api/pointages",
                     { date, activite, pointages: lignesAppel }, "Appel enregistré.");
-                if (ok && navigator.onLine) chargerAppel();
+                if (ok) chargerAppel();
             };
             const repr = document.getElementById("pt-reprendre");
             if (repr) repr.onclick = () => {
